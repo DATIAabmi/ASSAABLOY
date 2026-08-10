@@ -13,6 +13,7 @@ function buildParams(campaign: string, dateStart: string, dateEnd: string): obje
   const params: object[] = [];
   if (campaign) {
     params.push({
+      id: "campaign",
       type: "string/=",
       value: campaign,
       target: ["variable", ["template-tag", "Abmi_Campaign"]],
@@ -20,6 +21,7 @@ function buildParams(campaign: string, dateStart: string, dateEnd: string): obje
   }
   if (dateStart && dateEnd) {
     params.push({
+      id: "date",
       type: "date/range",
       value: `${dateStart}~${dateEnd}`,
       target: ["dimension", ["template-tag", "Date"]],
@@ -36,6 +38,7 @@ function buildLeadsParams(campaign: string, dateStart: string, dateEnd: string):
   const params: object[] = [];
   if (campaign) {
     params.push({
+      id: "campaign",
       type: "string/=",
       value: campaign,
       target: ["variable", ["template-tag", "Abmi_Campaign"]],
@@ -43,6 +46,7 @@ function buildLeadsParams(campaign: string, dateStart: string, dateEnd: string):
   }
   if (dateStart) {
     params.push({
+      id: "start_date",
       type: "date/single",
       value: dateStart,
       target: ["variable", ["template-tag", "start_date"]],
@@ -50,6 +54,7 @@ function buildLeadsParams(campaign: string, dateStart: string, dateEnd: string):
   }
   if (dateEnd) {
     params.push({
+      id: "end_date",
       type: "date/single",
       value: dateEnd,
       target: ["variable", ["template-tag", "end_date"]],

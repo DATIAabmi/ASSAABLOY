@@ -41,9 +41,8 @@ function mergeLabeledCounts(rowSets: [string, number][][]): [string, number][] {
 
 async function fetchSummaryForCampaign(campaign: string, dateStart: string, dateEnd: string) {
   const params: object[] = [];
-  if (campaign) params.push({ type: "string/=", value: campaign, target: ["variable", ["template-tag", "Abmi_Campaign"]] });
-  if (dateStart) params.push({ type: "date/range", value: dateStart, target: ["variable", ["template-tag", "Last_Updated.start"]] });
-  if (dateEnd) params.push({ type: "date/range", value: dateEnd, target: ["variable", ["template-tag", "Last_Updated.end"]] });
+  if (campaign) params.push({ id: "campaign", type: "string/=", value: campaign, target: ["variable", ["template-tag", "Abmi_Campaign"]] });
+  if (dateStart && dateEnd) params.push({ id: "date", type: "date/range", value: `${dateStart}~${dateEnd}`, target: ["dimension", ["template-tag", "Last_Updated"]] });
 
   const [r175, r176, r177, r178, r179] = await Promise.all([
     fetchCard(175, params),

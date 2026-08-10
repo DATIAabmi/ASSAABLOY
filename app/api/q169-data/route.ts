@@ -18,26 +18,31 @@ export async function GET(req: NextRequest) {
 
   const parameters: object[] = [];
   if (campaigns.length) parameters.push({
+    id: "campaign",
     type: "string/=",
     value: campaigns,
     target: ["variable", ["template-tag", "Abmi_Campaign"]],
   });
   if (districts.length) parameters.push({
+    id: "district",
     type: "string/=",
     value: districts,
     target: ["variable", ["template-tag", "user_district"]],
   });
   if (states.length) parameters.push({
+    id: "state",
     type: "string/=",
     value: states,
     target: ["variable", ["template-tag", "state"]],
   });
   if (dateStart) parameters.push({
+    id: "date_start",
     type: "date/range",
     value: dateStart,
     target: ["dimension", ["template-tag", "Last_Updated.start"]],
   });
   if (dateEnd) parameters.push({
+    id: "date_end",
     type: "date/range",
     value: dateEnd,
     target: ["dimension", ["template-tag", "Last_Updated.end"]],

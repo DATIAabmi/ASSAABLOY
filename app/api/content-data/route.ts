@@ -54,9 +54,9 @@ function mergeByLabel(rowSets: unknown[][][]): unknown[][] {
 
 async function fetchContentForCampaign(campaign: string, dateStart: string, dateEnd: string) {
   const params: object[] = [];
-  if (campaign)  params.push({ type: "string/=",   value: campaign,  target: ["variable", ["template-tag", "Abmi_Campaign"]] });
-  if (dateStart) params.push({ type: "date/range",  value: dateStart, target: ["variable", ["template-tag", "Date"]] });
-  if (dateEnd)   params.push({ type: "date/range",  value: dateEnd,   target: ["variable", ["template-tag", "Date"]] });
+  if (campaign)  params.push({ id: "campaign",   type: "string/=",   value: campaign,  target: ["variable", ["template-tag", "Abmi_Campaign"]] });
+  if (dateStart) params.push({ id: "date_start", type: "date/range",  value: dateStart, target: ["variable", ["template-tag", "Date"]] });
+  if (dateEnd)   params.push({ id: "date_end",   type: "date/range",  value: dateEnd,   target: ["variable", ["template-tag", "Date"]] });
 
   const [rows200, rows201, rows202, rows203, rows204] = await Promise.all([
     fetchCard(200, params),

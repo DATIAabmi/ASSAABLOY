@@ -25,8 +25,7 @@ const inflight = new Map<string, Promise<Dataset>>();
 
 async function fetchDataset(dateStart: string, dateEnd: string): Promise<Dataset> {
   const parameters: object[] = [];
-  if (dateStart) parameters.push({ id: "0b180445-b91a-4756-bdbe-6e7359010e64", type: "date/range", value: dateStart, target: ["dimension", ["template-tag", "Last_Updated.start"]] });
-  if (dateEnd)   parameters.push({ id: "b8f52013-7d42-4379-9b14-8af571898b24", type: "date/range", value: dateEnd,   target: ["dimension", ["template-tag", "Last_Updated.end"]] });
+  if (dateStart && dateEnd) parameters.push({ id: "date", type: "date/range", value: `${dateStart}~${dateEnd}`, target: ["dimension", ["template-tag", "Last_Updated"]] });
 
   const res = await fetch(`${METABASE_URL}/api/card/181/query`, {
     method: "POST",

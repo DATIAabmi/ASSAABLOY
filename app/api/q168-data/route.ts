@@ -18,17 +18,11 @@ export async function GET(req: NextRequest) {
 
   const parameters: object[] = [];
 
-  if (dateStart) parameters.push({
-    id: "91b942bb-02e7-4128-bd8e-ff29fb6bd7d9",
+  if (dateStart && dateEnd) parameters.push({
+    id: "date",
     type: "date/range",
-    value: dateStart,
-    target: ["dimension", ["template-tag", "Last_Updated.start"]],
-  });
-  if (dateEnd) parameters.push({
-    id: "d4d6bd60-ce65-4055-ad2d-c9403ba42401",
-    type: "date/range",
-    value: dateEnd,
-    target: ["dimension", ["template-tag", "Last_Updated.end"]],
+    value: `${dateStart}~${dateEnd}`,
+    target: ["dimension", ["template-tag", "Last_Updated"]],
   });
   // District/state/job function are filtered below (post-query) so multiple
   // values can be selected — the underlying SQL variables only support one.
@@ -48,8 +42,8 @@ export async function GET(req: NextRequest) {
   const normalizeColName = (name: string, displayName: string): string => {
     const key = name.toLowerCase();
     if (key === "job_function") return "Job Function";
-    if (key.includes("district") && key.includes("domain")) return "District Domain";
-    if (displayName.toLowerCase().includes("district") && displayName.toLowerCase().includes("domain")) return "District Domain";
+    if (key.includes("district") && key.includes("domain")) return "Domain";
+    if (displayName.toLowerCase().includes("district") && displayName.toLowerCase().includes("domain")) return "Domain";
     return displayName;
   };
   const cols = (data.data?.cols ?? []).map((c: { name: string; display_name: string; base_type: string }) => ({

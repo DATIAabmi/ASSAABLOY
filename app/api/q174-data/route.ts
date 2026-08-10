@@ -24,17 +24,11 @@ async function fetchForCampaign(campaign: string, dateStart: string, dateEnd: st
     value: campaign,
     target: ["variable", ["template-tag", "Abmi_Campaign"]],
   });
-  if (dateStart) parameters.push({
-    id: "04618b81-d06d-4227-a08b-7da50d59e85f",
+  if (dateStart && dateEnd) parameters.push({
+    id: "date",
     type: "date/range",
-    value: dateStart,
-    target: ["dimension", ["template-tag", "Last_Updated.start"]],
-  });
-  if (dateEnd) parameters.push({
-    id: "9891e1ff-9b6d-496b-8871-1cbf96c4cd20",
-    type: "date/range",
-    value: dateEnd,
-    target: ["dimension", ["template-tag", "Last_Updated.end"]],
+    value: `${dateStart}~${dateEnd}`,
+    target: ["dimension", ["template-tag", "Last_Updated"]],
   });
 
   const res = await fetch(`${METABASE_URL}/api/card/174/query`, {

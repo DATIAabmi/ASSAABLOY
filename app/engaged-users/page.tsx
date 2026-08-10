@@ -187,7 +187,6 @@ const SCORE_TREND_COL = 11;
 // Shorter/matches-reference labels so multi-word headers can wrap onto two
 // lines instead of forcing extra column width.
 const HEADER_LABELS: Record<string, string> = {
-  Domain: "District Domain",
   State: "ST",
   Downloads: "Total Downloads",
   "Score Trend": "Intent Score Trend",
@@ -350,7 +349,7 @@ function EngagedUsersContent() {
         {/* Filter + sort row */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <MultiSelectDropdown label="District Domain" value={domain}   onChange={setDomain}   search={fetchFieldOptions("domain")} />
+            <MultiSelectDropdown label="Domain" value={domain}   onChange={setDomain}   search={fetchFieldOptions("domain")} />
             <MultiSelectDropdown label="District"         value={district} onChange={setDistrict} search={fetchFieldOptions("district")} />
             <MultiSelectDropdown label="State"            value={state}    onChange={setState}    search={fetchFieldOptions("state")} />
             <button

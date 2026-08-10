@@ -22,6 +22,7 @@ let inflightPromise: Promise<{ cols: { display_name: string; base_type: string }
 async function fetchFullDataset() {
   const parameters = [
     {
+      id: "campaign",
       type: "string/=",
       value: [...CAMPAIGNS],
       target: ["variable", ["template-tag", "abmi_campaign"]],

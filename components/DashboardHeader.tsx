@@ -25,16 +25,16 @@ export default function DashboardHeader({ legend }: { legend?: string }) {
       : `${campaign.length} Campaigns Selected`;
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-8 py-5 mb-4">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-6 py-3 mb-4">
       <div className="relative flex items-center">
         {/* Left: ASSA ABLOY logo */}
-        <div className="flex-shrink-0 flex items-center gap-6">
+        <div className="flex-shrink-0 flex items-center gap-4">
           <Image
             src="/right-at-school-logo.png"
             alt="ASSA ABLOY"
             width={652}
             height={306}
-            style={{ height: "96px", width: "auto" }}
+            style={{ height: "76px", width: "auto" }}
             className="object-contain"
           />
           {/* Vertical divider */}
@@ -45,19 +45,19 @@ export default function DashboardHeader({ legend }: { legend?: string }) {
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
           <h1
             className="font-bold text-gray-900 leading-tight"
-            style={{ fontFamily: "'Lato', sans-serif", fontSize: "38px", letterSpacing: "-0.5px" }}
+            style={{ fontFamily: "'Lato', sans-serif", fontSize: "30px", letterSpacing: "-0.5px" }}
           >
             ASSA ABLOY Analytics
           </h1>
-          <p className="mt-1 font-medium" style={{ fontSize: "15px", color: "#6b8cba" }}>
+          <p className="mt-1 font-medium" style={{ fontSize: "12px", color: "#6b8cba" }}>
             {subtitle}
           </p>
-          <div className="h-0.5 bg-red-500 mt-2 rounded-full" style={{ width: 56 }} />
+          <div className="h-0.5 bg-red-500 mt-1.5 rounded-full" style={{ width: 44 }} />
         </div>
       </div>
 
       {/* Global filters — Campaign + Date Range */}
-      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2 flex-wrap">
+      <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-2 flex-wrap">
         <MultiSelectDropdown
           label="ABMi Campaign"
           value={campaign}
