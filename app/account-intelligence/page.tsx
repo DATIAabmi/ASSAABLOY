@@ -81,8 +81,29 @@ export default function AccountIntelligence() {
     return true;
   });
 
-  const csvCols = Object.keys(rows[0] ?? {}).map((k) => ({ display_name: k, base_type: "type/Text" }));
-  const csvRows = filtered.map((r) => Object.values(r));
+  // Clean, human-readable headers matching this tab's own data — not the raw
+  // internal field/alias names (e.g. "Signal_Analysis", "NCES_ID").
+  const CSV_COLUMNS: { key: keyof Signal; label: string }[] = [
+    { key: "Organization", label: "Organization" },
+    { key: "Domain", label: "Domain" },
+    { key: "State", label: "State" },
+    { key: "Category", label: "Category" },
+    { key: "Signal_Analysis", label: "Signal Analysis" },
+    { key: "Source_Text", label: "Source Text" },
+    { key: "Source", label: "Source" },
+    { key: "Source_Link", label: "Source Link" },
+    { key: "Strength", label: "Strength" },
+    { key: "Date", label: "Date" },
+    { key: "Amount", label: "Amount" },
+    { key: "Keywords", label: "Keywords" },
+    { key: "Campaign", label: "Campaign" },
+    { key: "Market", label: "Market" },
+    { key: "Enrollment", label: "Enrollment" },
+    { key: "NCES_ID", label: "NCES ID" },
+    { key: "IO_Number", label: "IO #" },
+  ];
+  const csvCols = CSV_COLUMNS.map((c) => ({ display_name: c.label, base_type: "type/Text" }));
+  const csvRows = filtered.map((r) => CSV_COLUMNS.map((c) => r[c.key]));
 
   return (
     <div style={{ position: "fixed", top: 0, left: "16rem", right: 0, bottom: 0,
