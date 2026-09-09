@@ -73,10 +73,10 @@ function LoginForm() {
           {/* Logo */}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 28 }}>
             <Image
-              src="/right-at-school-logo.png"
+              src="/assaabloy-logo.svg"
               alt="ASSA ABLOY"
-              width={200}
-              height={94}
+              width={370}
+              height={100}
               style={{ height: 64, width: "auto", objectFit: "contain" }}
             />
             <div style={{ height: 2, width: 48, background: "#ef4444", borderRadius: 2, marginTop: 14 }} />

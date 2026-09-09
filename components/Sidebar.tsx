@@ -55,10 +55,10 @@ export default function Sidebar() {
           </p>
         )}
         <Image
-          src="/datia-k12-logo.png"
+          src="/assaabloy-logo.svg"
           alt="ASSA ABLOY"
           width={180}
-          height={40}
+          height={49}
           priority
         />
         <p className="text-[10px] font-semibold tracking-widest text-gray-400 uppercase mt-2">

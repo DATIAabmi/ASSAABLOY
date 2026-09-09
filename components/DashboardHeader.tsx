@@ -30,10 +30,10 @@ export default function DashboardHeader({ legend }: { legend?: string }) {
         {/* Left: ASSA ABLOY logo */}
         <div className="flex-shrink-0 flex items-center gap-4">
           <Image
-            src="/right-at-school-logo.png"
+            src="/assaabloy-logo.svg"
             alt="ASSA ABLOY"
-            width={652}
-            height={306}
+            width={370}
+            height={100}
             style={{ height: "76px", width: "auto" }}
             className="object-contain"
           />
