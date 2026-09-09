@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
   });
 
   try {
-    const res = await fetch(`${METABASE_URL}/api/card/169/query`, {
+    const res = await fetch(`${METABASE_URL}/api/card/540/query`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
       body: JSON.stringify({ parameters }),

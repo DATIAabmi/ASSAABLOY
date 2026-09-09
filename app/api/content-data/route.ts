@@ -59,11 +59,11 @@ async function fetchContentForCampaign(campaign: string, dateStart: string, date
   if (dateEnd)   params.push({ id: "date_end",   type: "date/range",  value: dateEnd,   target: ["variable", ["template-tag", "Date"]] });
 
   const [rows200, rows201, rows202, rows203, rows204] = await Promise.all([
-    fetchCard(200, params),
-    fetchCard(201, params),
-    fetchCard(202, params),
-    fetchCard(203, params),
-    fetchCard(204, params),
+    fetchCard(549, params),
+    fetchCard(550, params),
+    fetchCard(551, params),
+    fetchCard(552, params),
+    fetchCard(553, params),
   ]);
 
   return {

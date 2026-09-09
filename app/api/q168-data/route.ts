@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   // District/state/job function are filtered below (post-query) so multiple
   // values can be selected — the underlying SQL variables only support one.
 
-  const res = await fetch(`${METABASE_URL}/api/card/168/query`, {
+  const res = await fetch(`${METABASE_URL}/api/card/539/query`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
     body: JSON.stringify({ parameters }),

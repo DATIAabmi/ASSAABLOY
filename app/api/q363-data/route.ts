@@ -30,7 +30,7 @@ async function fetchRowsForCampaign(campaign: string, dateStart: string, dateEnd
     });
   }
 
-  const res = await fetch(`${METABASE_URL}/api/card/363/query`, {
+  const res = await fetch(`${METABASE_URL}/api/card/531/query`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
     body: JSON.stringify({ parameters }),

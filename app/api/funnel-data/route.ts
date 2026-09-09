@@ -102,11 +102,11 @@ async function fetchFunnelForCampaign(campaign: string, dateStart: string, dateE
   const engagementParams = buildLeadsParams(campaign, dateStart, dateEnd);
   const [impressions, engagements, ctr, engagedUsers, leads] =
     await Promise.all([
-      fetchScalar(319, params),
-      fetchScalar(320, params),
-      fetchScalar(323, params),
-      fetchScalar(308, engagementParams),
-      fetchScalar(314, engagementParams),
+      fetchScalar(526, params),
+      fetchScalar(527, params),
+      fetchScalar(528, params),
+      fetchScalar(529, engagementParams),
+      fetchScalar(530, engagementParams),
     ]);
   return { impressions, engagements, ctr, engagedUsers, leads };
 }

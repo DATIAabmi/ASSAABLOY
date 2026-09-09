@@ -12,7 +12,7 @@ async function fetchRowsForCampaign(campaign: string, dateStart: string, dateEnd
   if (dateStart) params.push({ id: "date_start", type: "date/range", value: dateStart, target: ["variable", ["template-tag", "Date"]] });
   if (dateEnd)   params.push({ id: "date_end",   type: "date/range", value: dateEnd,   target: ["variable", ["template-tag", "Date"]] });
 
-  const res = await fetch(`${METABASE_URL}/api/card/205/query`, {
+  const res = await fetch(`${METABASE_URL}/api/card/554/query`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
     body: JSON.stringify({ parameters: params }),

@@ -12,7 +12,7 @@ let memCacheAt = 0;
 let inflightPromise: Promise<{ rows: unknown[][] }> | null = null;
 
 async function fetchRows() {
-  const res = await fetch(`${METABASE_URL}/api/card/180/query`, {
+  const res = await fetch(`${METABASE_URL}/api/card/547/query`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
     body: JSON.stringify({ parameters: [] }),

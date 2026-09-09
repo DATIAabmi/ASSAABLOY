@@ -45,11 +45,11 @@ async function fetchSummaryForCampaign(campaign: string, dateStart: string, date
   if (dateStart && dateEnd) params.push({ id: "date", type: "date/range", value: `${dateStart}~${dateEnd}`, target: ["dimension", ["template-tag", "Last_Updated"]] });
 
   const [r175, r176, r177, r178, r179] = await Promise.all([
-    fetchCard(175, params),
-    fetchCard(176, params),
-    fetchCard(177, params),
-    fetchCard(178, params),
-    fetchCard(179, params),
+    fetchCard(542, params),
+    fetchCard(543, params),
+    fetchCard(544, params),
+    fetchCard(545, params),
+    fetchCard(546, params),
   ]);
 
   return {

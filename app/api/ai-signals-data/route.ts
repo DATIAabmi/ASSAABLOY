@@ -5,7 +5,7 @@ export const maxDuration = 60;
 
 const METABASE_URL = process.env.NEXT_PUBLIC_METABASE_URL!;
 const API_KEY = process.env.METABASE_ADMIN_API_KEY!;
-const CARD_ID = 432;
+const CARD_ID = 555; // ASSA ABLOY - AI Signals - Top AI Signals Table (clone of RAS card 432)
 
 let memCache: unknown[] | null = null;
 let memCacheAt = 0;

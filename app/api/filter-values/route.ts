@@ -5,7 +5,7 @@ const API_KEY = process.env.METABASE_ADMIN_API_KEY!;
 const DB_ID = 34;
 
 async function queryDistinct(field: string, alias: string): Promise<string[]> {
-  const table = "`prj-datia-prod-e530.df_gcp_campaign_cbl_prod.prod_cbl_rightatschool_2025_scoring`";
+  const table = "`prj-datia-prod-e530.df_gcp_campaign_cbl_prod.prod_cbl_assaabloy_202602_scoring`";
   const sql = `SELECT DISTINCT ${field} AS val FROM ${table} WHERE ${field} IS NOT NULL AND ${field} != "" ORDER BY val LIMIT 2000`;
 
   const res = await fetch(`${METABASE_URL}/api/dataset`, {

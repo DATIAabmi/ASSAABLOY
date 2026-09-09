@@ -29,7 +29,7 @@ async function fetchFullDataset() {
     },
   ];
 
-  const res = await fetch(`${METABASE_URL}/api/card/425/query`, {
+  const res = await fetch(`${METABASE_URL}/api/card/538/query`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
     body: JSON.stringify({ parameters }),

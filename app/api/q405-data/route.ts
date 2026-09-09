@@ -32,7 +32,7 @@ async function fetchFullDataset() {
 
   let res: Response;
   try {
-    res = await fetch(`${METABASE_URL}/api/card/405/query`, {
+    res = await fetch(`${METABASE_URL}/api/card/537/query`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
       body: JSON.stringify({ parameters: [] }),

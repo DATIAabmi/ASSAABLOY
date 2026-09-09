@@ -27,7 +27,7 @@ async function fetchDataset(dateStart: string, dateEnd: string): Promise<Dataset
   const parameters: object[] = [];
   if (dateStart && dateEnd) parameters.push({ id: "date", type: "date/range", value: `${dateStart}~${dateEnd}`, target: ["dimension", ["template-tag", "Last_Updated"]] });
 
-  const res = await fetch(`${METABASE_URL}/api/card/181/query`, {
+  const res = await fetch(`${METABASE_URL}/api/card/548/query`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
     body: JSON.stringify({ parameters }),

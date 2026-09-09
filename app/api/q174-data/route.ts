@@ -31,7 +31,7 @@ async function fetchForCampaign(campaign: string, dateStart: string, dateEnd: st
     target: ["dimension", ["template-tag", "Last_Updated"]],
   });
 
-  const res = await fetch(`${METABASE_URL}/api/card/174/query`, {
+  const res = await fetch(`${METABASE_URL}/api/card/541/query`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
     body: JSON.stringify({ parameters }),

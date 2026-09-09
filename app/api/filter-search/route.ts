@@ -4,7 +4,7 @@ import { cachedJson } from "@/lib/apiCache";
 const METABASE_URL = process.env.NEXT_PUBLIC_METABASE_URL!;
 const API_KEY = process.env.METABASE_ADMIN_API_KEY!;
 const DB_ID = 34;
-const TABLE = "`prj-datia-prod-e530.df_gcp_campaign_cbl_prod.prod_cbl_rightatschool_2025_scoring`";
+const TABLE = "`prj-datia-prod-e530.df_gcp_campaign_cbl_prod.prod_cbl_assaabloy_202602_scoring`";
 
 const FIELD_MAP: Record<string, string> = {
   district: "topic_district",
