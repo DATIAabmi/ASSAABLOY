@@ -171,7 +171,7 @@ function AdSamplesEmbed() {
           style={{ height: "100%", width: "100%", visibility: ready ? "visible" : "hidden" }}>
           <InteractiveDashboard
             key={campaign.join(",")}
-            dashboardId={35}
+            dashboardId={100} // ASSA ABLOY - Prod Cbl Rightatschool 2025 Ad Performance (clone of RAS dashboard 35)
             initialParameters={params}
             withTitle={false}
             style={{ height: "100%" }}

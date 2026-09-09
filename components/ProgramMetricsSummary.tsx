@@ -10,35 +10,37 @@ interface Metric {
   goalCardId?: number;
 }
 
+// Card ids point at the ASSA ABLOY collection's clones (532-536, 721, 722)
+// of Right At School's Program Metrics cards (299-305).
 const METRICS: Metric[] = [
   {
     label: "Impressions",
     description: "Number of times your content or ads were displayed on social, offsite display",
     goal: "Impression Goal: 300,000",
-    cardId: 299,
-    goalCardId: 300,
+    cardId: 532,
+    goalCardId: 721,
   },
   {
     label: "Engagements",
     description: "Number of clicks on your ads or opened emails",
-    cardId: 301,
+    cardId: 533,
   },
   {
     label: "Click Thru Rate",
     description: "The percentage of people that click on a link or ad out of all the times they saw that ad",
-    cardId: 302,
+    cardId: 534,
   },
   {
     label: "Engaged Users",
     description: "Unique users who viewed your content from all sources",
-    cardId: 303,
+    cardId: 535,
   },
   {
     label: "Downloads",
     description: "Goal: 300 Leads",
     goal: "Goal: 300 Leads",
-    cardId: 304,
-    goalCardId: 305,
+    cardId: 536,
+    goalCardId: 722,
   },
 ];
 
