@@ -56,7 +56,7 @@ async function fetchData(
   const sql = `
 SELECT
   topic_district AS District,
-  ANY_VALUE(email_domain) AS Domain,
+  email_domain AS Domain,
   ANY_VALUE(state) AS ST,
   ANY_VALUE(abm_campaign) AS Camp,
   IF(MAX(CASE WHEN SBM_Y_N = 'Y' THEN 1 ELSE 0 END) = 1, 'Y', 'N') AS SBM,
@@ -69,7 +69,7 @@ SELECT
   SUM(IFNULL(SAFE_CAST(cumulative_score_trend AS FLOAT64), 0)) AS \`Score Trend\`
 FROM ${TABLE}
 WHERE ${where.join("\n  AND ")}
-GROUP BY topic_district
+GROUP BY topic_district, email_domain
 ORDER BY \`Intent Score\` DESC`;
 
   const controller = new AbortController();
