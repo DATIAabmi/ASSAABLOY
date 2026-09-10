@@ -5,7 +5,10 @@ export const maxDuration = 60;
 
 const METABASE_URL = process.env.NEXT_PUBLIC_METABASE_URL!;
 const API_KEY = process.env.METABASE_ADMIN_API_KEY!;
+const DB_ID = 34;
+const TABLE = "`prj-datia-prod-e530.df_gcp_campaign_cbl_prod.prod_cbl_assaabloy_202602_scoring`";
 
+// Maps SQL alias → display name shown in the UI
 const DISPLAY_NAMES: Record<string, string> = {
   ST:          "State",
   Camp:        "Campaign",
@@ -18,24 +21,71 @@ function parseList(v: string | null): string[] {
   return (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 }
 
-// In-memory cache for the full dataset — avoids hitting Metabase/BigQuery on
-// every filter change since all filtering is done server-side anyway.
-const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
-let memCache: { cols: { display_name: string; base_type: string }[]; rows: unknown[][] } | null = null;
-let memCacheAt = 0;
-// Track whether a fetch is in progress so concurrent requests share one call
-let inflightPromise: Promise<{ cols: { display_name: string; base_type: string }[]; rows: unknown[][] }> | null = null;
+function sqlStr(v: string): string {
+  return `'${v.replace(/'/g, "''")}'`;
+}
 
-async function fetchFullDataset() {
+// Cache keyed on all filter params — campaign filter changes the aggregated Score Trend
+const CACHE_TTL_MS = 30 * 60 * 1000;
+const memCache = new Map<string, { data: { cols: unknown[]; rows: unknown[][] }; ts: number }>();
+const inflight = new Map<string, Promise<{ cols: unknown[]; rows: unknown[][] }>>();
+
+async function fetchData(
+  campaigns: string[],
+  districts: string[],
+  domains: string[],
+  states: string[],
+): Promise<{ cols: unknown[]; rows: unknown[][] }> {
+  const where: string[] = [
+    "topic_district IS NOT NULL",
+    "topic_district != ''",
+  ];
+
+  // Campaign filter applied BEFORE GROUP BY so aggregates are correct.
+  // The ASSA ABLOY scoring table stores the full campaign label
+  // ("C1: March - April 2026") in `abmi_campaign`; `abm_campaign` only holds
+  // the short code ("C1"). The app sends full labels, so match `abmi_campaign`.
+  if (campaigns.length) {
+    const exprs = campaigns.map((c) => `abmi_campaign = ${sqlStr(c)}`);
+    where.push(`(${exprs.join(" OR ")})`);
+  }
+  if (districts.length) where.push(`topic_district IN (${districts.map(sqlStr).join(", ")})`);
+  if (domains.length)   where.push(`email_domain IN (${domains.map(sqlStr).join(", ")})`);
+  if (states.length)    where.push(`state IN (${states.map(sqlStr).join(", ")})`);
+
+  const sql = `
+SELECT
+  topic_district AS District,
+  ANY_VALUE(email_domain) AS Domain,
+  ANY_VALUE(state) AS ST,
+  ANY_VALUE(abm_campaign) AS Camp,
+  IF(MAX(CASE WHEN SBM_Y_N = 'Y' THEN 1 ELSE 0 END) = 1, 'Y', 'N') AS SBM,
+  IF(MAX(CASE WHEN topic_Y_N = 'Y' THEN 1 ELSE 0 END) = 1, 'Y', 'N') AS Topic,
+  SUM(IFNULL(SAFE_CAST(engagements AS FLOAT64), 0)) AS Engagements,
+  COUNT(user_engagement_score_trend) AS EngagedUser,
+  COUNT(NULLIF(CAST(leads AS STRING), '')) AS UniqueLeads,
+  SUM(IFNULL(SAFE_CAST(downloads AS FLOAT64), 0)) AS Down,
+  SUM(IFNULL(SAFE_CAST(cumulative_score AS FLOAT64), 0)) AS \`Intent Score\`,
+  SUM(IFNULL(SAFE_CAST(cumulative_score_trend AS FLOAT64), 0)) AS \`Score Trend\`
+FROM ${TABLE}
+WHERE ${where.join("\n  AND ")}
+GROUP BY topic_district
+ORDER BY \`Intent Score\` DESC`;
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 55000);
 
   let res: Response;
   try {
-    res = await fetch(`${METABASE_URL}/api/card/537/query`, {
+    res = await fetch(`${METABASE_URL}/api/dataset`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
-      body: JSON.stringify({ parameters: [] }),
+      body: JSON.stringify({
+        database: DB_ID,
+        type: "native",
+        native: { query: sql },
+        middleware: { "js-int-to-string?": true },
+      }),
       cache: "no-store",
       signal: controller.signal,
     });
@@ -43,31 +93,22 @@ async function fetchFullDataset() {
     clearTimeout(timeout);
   }
 
-  if (!res.ok) return { cols: [], rows: [] };
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Metabase ${res.status}: ${body.slice(0, 300)}`);
+  }
 
   const data = await res.json();
-  const cols = (data.data?.cols ?? []).map((c: { name: string; display_name: string; base_type: string }) => ({
-    display_name: DISPLAY_NAMES[c.name] ?? c.display_name,
-    base_type: c.base_type,
-  }));
+  if (data.error) throw new Error(`Query error: ${data.error}`);
+
+  const cols = (data.data?.cols ?? []).map(
+    (c: { display_name: string; base_type: string }) => ({
+      display_name: DISPLAY_NAMES[c.display_name] ?? c.display_name,
+      base_type: c.base_type,
+    }),
+  );
   const rows: unknown[][] = data.data?.rows ?? [];
   return { cols, rows };
-}
-
-async function getDataset() {
-  if (memCache && Date.now() - memCacheAt < CACHE_TTL_MS) return memCache;
-  if (!inflightPromise) {
-    inflightPromise = fetchFullDataset().then((result) => {
-      memCache = result;
-      memCacheAt = Date.now();
-      inflightPromise = null;
-      return result;
-    }).catch((err) => {
-      inflightPromise = null;
-      throw err;
-    });
-  }
-  return inflightPromise;
 }
 
 export async function GET(req: NextRequest) {
@@ -78,26 +119,29 @@ export async function GET(req: NextRequest) {
     const domains   = parseList(searchParams.get("domain"));
     const states    = parseList(searchParams.get("state"));
 
-    const { cols, rows: allRows } = await getDataset();
-    let rows: unknown[][] = allRows;
+    const cacheKey = JSON.stringify({ campaigns, districts, domains, states });
+    const cached = memCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+      return cachedJson(cached.data);
+    }
 
-    const districtCol  = cols.findIndex((c) => c.display_name === "District");
-    const domainCol    = cols.findIndex((c) => c.display_name === "Domain");
-    const stateCol     = cols.findIndex((c) => c.display_name === "State");
-    const campaignCol  = cols.findIndex((c) => c.display_name === "Campaign");
-    const campaignShortCodes = campaigns.map((c) => c.split(":")[0].trim());
+    if (!inflight.has(cacheKey)) {
+      const p = fetchData(campaigns, districts, domains, states)
+        .then((result) => {
+          memCache.set(cacheKey, { data: result, ts: Date.now() });
+          inflight.delete(cacheKey);
+          return result;
+        })
+        .catch((err) => {
+          inflight.delete(cacheKey);
+          throw err;
+        });
+      inflight.set(cacheKey, p);
+    }
 
-    const matches = (values: string[], colIdx: number) => (row: unknown[]) =>
-      values.length === 0 || (colIdx >= 0 && values.some((v) => v.toLowerCase() === String(row[colIdx] ?? "").toLowerCase()));
-
-    rows = rows
-      .filter(matches(campaignShortCodes, campaignCol))
-      .filter(matches(districts, districtCol))
-      .filter(matches(domains, domainCol))
-      .filter(matches(states, stateCol));
-
+    const { cols, rows } = await inflight.get(cacheKey)!;
     return cachedJson({ cols, rows });
-  } catch {
-    return NextResponse.json({ cols: [], rows: [] });
+  } catch (err) {
+    return NextResponse.json({ cols: [], rows: [], error: String(err) });
   }
 }
