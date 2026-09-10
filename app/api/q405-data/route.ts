@@ -42,12 +42,12 @@ async function fetchData(
   ];
 
   // Campaign filter applied BEFORE GROUP BY so aggregates are correct.
-  // The ASSA ABLOY scoring table stores the full campaign label
-  // ("C1: March - April 2026") in `abmi_campaign`; `abm_campaign` only holds
-  // the short code ("C1"). The app sends full labels, so match `abmi_campaign`.
+  // The ASSA ABLOY scoring table's `abm_campaign` column holds the short code
+  // ("C1"), which is exactly what engaged-users/page.tsx sends. Normalize any
+  // full label ("C1: March - April 2026") down to its code just in case.
   if (campaigns.length) {
-    const exprs = campaigns.map((c) => `abmi_campaign = ${sqlStr(c)}`);
-    where.push(`(${exprs.join(" OR ")})`);
+    const codes = campaigns.map((c) => c.split(":")[0].trim());
+    where.push(`abm_campaign IN (${codes.map(sqlStr).join(", ")})`);
   }
   if (districts.length) where.push(`topic_district IN (${districts.map(sqlStr).join(", ")})`);
   if (domains.length)   where.push(`email_domain IN (${domains.map(sqlStr).join(", ")})`);
