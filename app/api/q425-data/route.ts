@@ -1,50 +1,63 @@
 import { NextRequest, NextResponse } from "next/server";
-import { CAMPAIGNS } from "@/lib/campaigns";
 import { cachedJson } from "@/lib/apiCache";
 
 export const maxDuration = 60;
 
 const METABASE_URL = process.env.NEXT_PUBLIC_METABASE_URL!;
 const API_KEY = process.env.METABASE_ADMIN_API_KEY!;
-const DISPLAY_NAMES: Record<string, string> = { ST: "State" };
+const DB_ID = 34;
 
 function parseList(v: string | null): string[] {
   return (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 }
 
-// In-memory cache — same strategy as q405-data. Full dataset is always fetched
-// (all campaigns), so all filter combinations share one cached copy.
-const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
-let memCache: { cols: { display_name: string; base_type: string }[]; rows: unknown[][] } | null = null;
+const STATIC_COLS = [
+  { display_name: "District",      base_type: "type/Text" },
+  { display_name: "Campaign",      base_type: "type/Text" },
+  { display_name: "District Domain", base_type: "type/Text" },
+  { display_name: "State",         base_type: "type/Text" },
+  { display_name: "SBM Date",      base_type: "type/DateTime" },
+  { display_name: "Keyword",       base_type: "type/Text" },
+  { display_name: "SBM Context",   base_type: "type/Text" },
+  { display_name: "SBM Link",      base_type: "type/Text" },
+];
+
+const SQL = `
+SELECT
+  topic_district        AS District,
+  abmi_campaign         AS Campaign,
+  email_domain          AS District_Domain,
+  state                 AS State,
+  e.SBM_Date            AS SBM_Date,
+  e.curate_topic        AS Keyword,
+  e.SBM_Context         AS SBM_Context,
+  e.SBM_Link            AS SBM_Link
+FROM \`prj-datia-prod-e530.df_gcp_campaign_cbl_prod.prod_cbl_assaabloy_202602_scoring\`,
+UNNEST(engagement) AS e
+WHERE e.SBM_Date IS NOT NULL
+  AND e.SBM_Link IS NOT NULL
+ORDER BY topic_district, e.SBM_Date DESC
+`;
+
+const CACHE_TTL_MS = 30 * 60 * 1000;
+let memCache: { rows: unknown[][] } | null = null;
 let memCacheAt = 0;
-let inflightPromise: Promise<{ cols: { display_name: string; base_type: string }[]; rows: unknown[][] }> | null = null;
+let inflightPromise: Promise<{ rows: unknown[][] }> | null = null;
 
 async function fetchFullDataset() {
-  const parameters = [
-    {
-      id: "campaign",
-      type: "string/=",
-      value: [...CAMPAIGNS],
-      target: ["variable", ["template-tag", "abmi_campaign"]],
-    },
-  ];
-
-  const res = await fetch(`${METABASE_URL}/api/card/538/query`, {
+  const res = await fetch(`${METABASE_URL}/api/dataset`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
-    body: JSON.stringify({ parameters }),
+    body: JSON.stringify({ database: DB_ID, type: "native", native: { query: SQL } }),
     cache: "no-store",
   });
 
-  if (!res.ok) return { cols: [], rows: [] };
-
+  if (!res.ok) return { rows: [] };
   const data = await res.json();
-  const cols = (data.data?.cols ?? []).map((c: { name: string; display_name: string; base_type: string }) => ({
-    display_name: DISPLAY_NAMES[c.name] ?? c.display_name,
-    base_type: c.base_type,
-  }));
-  const rows: unknown[][] = data.data?.rows ?? [];
-  return { cols, rows };
+  const rows: unknown[][] = (data.data?.rows ?? []).map((r: unknown[]) =>
+    r.map((v, i) => i === 2 ? v : v)
+  );
+  return { rows };
 }
 
 async function getDataset() {
@@ -66,35 +79,30 @@ async function getDataset() {
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = req.nextUrl;
-    const campaigns  = parseList(searchParams.get("campaign"));
+    const campaigns = parseList(searchParams.get("campaign"));
     const districts  = parseList(searchParams.get("district"));
     const dateStart  = searchParams.get("dateStart") ?? "";
     const dateEnd    = searchParams.get("dateEnd")   ?? "";
 
-    const { cols, rows: allRows } = await getDataset();
+    // col indices: 0=District 1=Campaign 2=District_Domain 3=State 4=SBM_Date 5=Keyword 6=SBM_Context 7=SBM_Link
+    const { rows: allRows } = await getDataset();
 
-    const districtCol = cols.findIndex((c) => c.display_name === "District");
-    const campaignCol = cols.findIndex((c) => c.display_name === "Campaign");
-    // SBM Date is the 5th column in raw order (index 4)
-    const dateCol     = cols.findIndex((c) => c.display_name === "SBM Date");
-
-    const matches = (values: string[], colIdx: number) => (row: unknown[]) =>
-      values.length === 0 || (colIdx >= 0 && values.some((v) => v.toLowerCase() === String(row[colIdx] ?? "").toLowerCase()));
+    const matches = (values: string[], idx: number) => (row: unknown[]) =>
+      values.length === 0 || values.some((v) => v.toLowerCase() === String(row[idx] ?? "").toLowerCase());
 
     const rows = allRows
-      .filter(matches(campaigns, campaignCol))
-      .filter(matches(districts, districtCol))
+      .filter(matches(campaigns, 1))
+      .filter(matches(districts, 0))
       .filter((row) => {
         if (!dateStart && !dateEnd) return true;
-        if (dateCol < 0) return true;
-        const raw = String(row[dateCol] ?? "").slice(0, 10); // "YYYY-MM-DD"
+        const raw = String(row[4] ?? "").slice(0, 10);
         if (dateStart && raw < dateStart) return false;
         if (dateEnd   && raw > dateEnd)   return false;
         return true;
       });
 
-    return cachedJson({ cols, rows });
+    return cachedJson({ cols: STATIC_COLS, rows });
   } catch {
-    return NextResponse.json({ cols: [], rows: [] });
+    return NextResponse.json({ cols: STATIC_COLS, rows: [] });
   }
 }

@@ -1,51 +1,113 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ExternalLink, Loader2, Download } from "lucide-react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ExternalLink, Loader2, Download, Search, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown } from "lucide-react";
 import DashboardHeader from "@/components/DashboardHeader";
 import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 import { exportToCsv } from "@/lib/exportCsv";
+import { fmtDate } from "@/lib/fmtDate";
 
-type Signal = {
-  Organization: string | null;
-  Domain: string | null;
-  State: string | null;
-  Campaign: string | null;
-  Category: string | null;
-  Source: string | null;
-  Signal_Analysis: string | null;
-  Source_Text: string | null;
-  Source_Link: string | null;
-  Strength: number | null;
-  Date: string | null;
-  Amount: string | null;
-  Keywords: string | null;
-  Enrollment: number | null;
-  NCES_ID: number | null;
-  IO_Number: number | null;
-  Market: string | null;
-};
+type Signal = Record<string, unknown>;
+type SortDir = "asc" | "desc";
+interface SortState { col: string; dir: SortDir }
 
-function strengthColor(s: number | null): { bg: string; text: string } {
-  const v = s ?? 0;
-  if (v >= 8) return { bg: "#D4EFDF", text: "#145A32" };
-  if (v >= 5) return { bg: "#FEF3CD", text: "#7A5800" };
-  return { bg: "#F4E8E6", text: "#8A2010" };
+function extractDomain(url: string | null | undefined): string {
+  if (!url) return "";
+  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; }
 }
 
-function fmtDate(v: string | null): string {
-  if (!v) return "—";
-  const d = new Date(v);
-  if (isNaN(d.getTime())) return v;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+// Full column grid — table scrolls horizontally
+// # | District | Domain | State | Campaign | Keywords | Source Link | Date | Category | Source | Signal Analysis | Source Text | Strength
+const COLS = [
+  { key: "#",               width: 30,  sort: false, flex: false },
+  { key: "District",        width: 120, sort: true,  flex: false },
+  { key: "Domain",          width: 120, sort: true,  flex: false },
+  { key: "State",           width: 40,  sort: true,  flex: false },
+  { key: "Campaign",        width: 65,  sort: true,  flex: false },
+  { key: "Keywords",        width: 160, sort: true,  flex: false },
+  { key: "Source Link",     width: 90,  sort: false, flex: false },
+  { key: "Date",            width: 75,  sort: true,  flex: false },
+  { key: "Category",        width: 115, sort: true,  flex: false },
+  { key: "Source",          width: 90,  sort: true,  flex: false },
+  { key: "Signal Analysis", width: 220, sort: true,  flex: true  },
+  { key: "Source Text",     width: 260, sort: false, flex: true  },
+  { key: "Strength",        width: 70,  sort: true,  flex: false },
+];
+
+const SORT_OPTIONS = COLS.filter((c) => c.sort);
+
+// Signal Analysis expands to fill extra horizontal space; all others are fixed
+const GRID = COLS.map((c) => c.flex ? `minmax(${c.width}px, 1fr)` : `${c.width}px`).join(" ");
+const GAP  = "0 8px";
+const MIN_W = COLS.reduce((s, c) => s + c.width, 0) + (COLS.length - 1) * 8 + 40;
+
+// ── Sort dropdown ─────────────────────────────────────────────────────────────
+function SortDropdown({ sort, onSort }: { sort: SortState; onSort: (s: SortState) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm hover:border-blue-400 transition-colors">
+        <ArrowUpDown size={13} className="text-gray-400" />
+        <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Sort by:</span>
+        <span className="text-blue-600 font-medium text-xs">{sort.col}</span>
+        <span className="text-gray-400 text-xs">{sort.dir === "asc" ? "↑" : "↓"}</span>
+        <ChevronDown size={13} className="text-gray-400 shrink-0" />
+      </button>
+      {open && (
+        <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 min-w-[180px] py-1">
+          {SORT_OPTIONS.map((c) => {
+            const active = sort.col === c.key;
+            return (
+              <button key={c.key}
+                onClick={() => { onSort({ col: c.key, dir: active && sort.dir === "desc" ? "asc" : "desc" }); setOpen(false); }}
+                className={`w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-gray-50 ${active ? "text-blue-600 font-semibold" : "text-gray-600"}`}>
+                {c.key}
+                {active && (sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
-export default function AiOpportunityFeed() {
-  const [rows, setRows] = useState<Signal[]>([]);
+// Map column header key → the row field it sorts by
+function getRowValue(row: Signal, colKey: string): unknown {
+  switch (colKey) {
+    case "District":        return row["Organization"];
+    case "Domain":          return (row["Domain"] as string) || extractDomain(row["Source Link"] as string);
+    case "State":           return row["State"];
+    case "Campaign":        return row["Campaign #"];
+    case "Keywords":        return row["Keywords"];
+    case "Date":            return row["Date"];
+    case "Category":        return row["Category"];
+    case "Source":          return row["Source"];
+    case "Signal Analysis": return row["Signal Analysis"];
+    case "Strength":        return row["Strength"];
+    default:                return null;
+  }
+}
+
+export default function AIOpportunityFeed() {
+  const [rows, setRows]       = useState<Signal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError]     = useState("");
+  const [sort, setSort]       = useState<SortState>({ col: "Date", dir: "desc" });
   const [filterCategory, setFilterCategory] = useState<string[]>([]);
-  const [filterState, setFilterState] = useState<string[]>([]);
+  const [filterSource,   setFilterSource]   = useState<string[]>([]);
+  const [searchText,     setSearchText]     = useState("");
 
   const titleBarRef = useRef<HTMLDivElement>(null);
   const [titleBarHeight, setTitleBarHeight] = useState(0);
@@ -62,187 +124,215 @@ export default function AiOpportunityFeed() {
 
   useEffect(() => {
     setLoading(true);
-    fetch("/api/account-intelligence-data")
+    fetch("/api/ai-signals-data?v=2")
       .then((r) => r.json())
-      .then((d) => {
+      .then((d: { rows?: Signal[]; columns?: string[]; error?: string }) => {
         if (d.error) throw new Error(d.error);
         setRows(d.rows ?? []);
         setLoading(false);
       })
-      .catch((e) => { setError(e.message ?? "Failed to load"); setLoading(false); });
+      .catch((e: Error) => { setError(e.message ?? "Failed to load"); setLoading(false); });
   }, []);
 
-  const categories = [...new Set(rows.map((r) => r.Category).filter(Boolean))] as string[];
-  const states = [...new Set(rows.map((r) => r.State).filter(Boolean))] as string[];
+  const categoryOptions = [...new Set(rows.map((r) => String(r["Category"] ?? "")).filter(Boolean))].sort();
+  const sourceOptions   = [...new Set(rows.map((r) => String(r["Source"]   ?? "")).filter(Boolean))].sort();
 
+  const q = searchText.trim().toLowerCase();
   const filtered = rows.filter((r) => {
-    if (filterCategory.length && !filterCategory.includes(r.Category ?? "")) return false;
-    if (filterState.length && !filterState.includes(r.State ?? "")) return false;
+    if (filterCategory.length && !filterCategory.includes((r["Category"] as string) ?? "")) return false;
+    if (filterSource.length   && !filterSource.includes((r["Source"] as string) ?? ""))     return false;
+    if (q) {
+      const haystack = [
+        r["Keywords"], r["Organization"], r["State"], r["Campaign #"],
+        r["Source"], r["Category"],
+        extractDomain(r["Source Link"] as string),
+      ].map((v) => String(v ?? "").toLowerCase()).join(" ");
+      if (!haystack.includes(q)) return false;
+    }
     return true;
   });
 
-  // Clean, human-readable headers matching this tab's own data — not the raw
-  // internal field/alias names (e.g. "Signal_Analysis", "NCES_ID").
-  const CSV_COLUMNS: { key: keyof Signal; label: string }[] = [
-    { key: "Organization", label: "Organization" },
-    { key: "Domain", label: "Domain" },
-    { key: "State", label: "State" },
-    { key: "Category", label: "Category" },
-    { key: "Signal_Analysis", label: "Signal Analysis" },
-    { key: "Source_Text", label: "Source Text" },
-    { key: "Source", label: "Source" },
-    { key: "Source_Link", label: "Source Link" },
-    { key: "Strength", label: "Strength" },
-    { key: "Date", label: "Date" },
-    { key: "Amount", label: "Amount" },
-    { key: "Keywords", label: "Keywords" },
-    { key: "Campaign", label: "Campaign" },
-    { key: "Market", label: "Market" },
-    { key: "Enrollment", label: "Enrollment" },
-    { key: "NCES_ID", label: "NCES ID" },
-    { key: "IO_Number", label: "IO #" },
-  ];
-  const csvCols = CSV_COLUMNS.map((c) => ({ display_name: c.label, base_type: "type/Text" }));
-  const csvRows = filtered.map((r) => CSV_COLUMNS.map((c) => r[c.key]));
+  const sorted = [...filtered].sort((a, b) => {
+    const av = getRowValue(a, sort.col);
+    const bv = getRowValue(b, sort.col);
+    if (av === null || av === undefined) return 1;
+    if (bv === null || bv === undefined) return -1;
+    const cmp = typeof av === "number" && typeof bv === "number"
+      ? av - bv : String(av).localeCompare(String(bv));
+    return sort.dir === "asc" ? cmp : -cmp;
+  });
+
+  const csvCols = [
+    "Organization", "Domain", "State", "Campaign #", "Keywords",
+    "Source Link", "Date", "Category", "Source", "Signal Analysis", "Source Text", "Strength",
+  ].map((k) => ({ display_name: k, base_type: "type/Text" }));
+  const csvRows = sorted.map((r) => csvCols.map((c) => r[c.display_name]));
 
   return (
     <div style={{ position: "fixed", top: 0, left: "16rem", right: 0, bottom: 0,
                   display: "flex", flexDirection: "column", background: "#f9fafb", zIndex: 1 }}>
+      {/* Filters */}
       <div style={{ flexShrink: 0, padding: "16px 24px 0" }}>
         <DashboardHeader />
-
-        {/* Filter row */}
-        <div className="flex items-center gap-2 mb-3 flex-wrap">
-          <MultiSelectDropdown label="Category" value={filterCategory} onChange={setFilterCategory} options={categories} />
-          <MultiSelectDropdown label="State" value={filterState} onChange={setFilterState} options={states} />
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-lg bg-white">
+              <Search size={13} className="text-gray-400 shrink-0" />
+              <input
+                type="text"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                placeholder="Search district, state…"
+                className="text-xs text-gray-700 bg-transparent border-none outline-none w-44 placeholder-gray-400"
+              />
+              {searchText && (
+                <button onClick={() => setSearchText("")} className="text-gray-300 hover:text-gray-500 ml-0.5 text-xs leading-none">✕</button>
+              )}
+            </div>
+            <MultiSelectDropdown label="Category" value={filterCategory} onChange={setFilterCategory} options={categoryOptions} />
+            <MultiSelectDropdown label="Source"   value={filterSource}   onChange={setFilterSource}   options={sourceOptions} />
+          </div>
+          <SortDropdown sort={sort} onSort={setSort} />
         </div>
       </div>
 
+      {/* Horizontally scrollable content area */}
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "0 24px 24px" }}>
-        {/* Title bar */}
-        <div ref={titleBarRef} className="sticky top-0 z-20 bg-gray-900 text-white px-5 py-3 rounded-t-xl flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="font-bold text-sm tracking-wide uppercase">Account Intelligence</span>
-            <span className="text-gray-400 text-xs">Customer 12095</span>
-            {!loading && (
-              <span className="text-gray-400 text-xs">{filtered.length.toLocaleString()} signals</span>
+        <div style={{ minWidth: MIN_W, width: "100%" }}>
+          {/* Title bar */}
+          <div ref={titleBarRef} className="sticky top-0 z-20 bg-gray-900 text-white px-5 py-3 rounded-t-xl flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="font-bold text-sm tracking-wide uppercase">Account Intelligence</span>
+              {!loading && <span className="text-gray-400 text-xs">{sorted.length.toLocaleString()} signals</span>}
+            </div>
+            {!loading && sorted.length > 0 && (
+              <button
+                onClick={() => exportToCsv("ai-signals", csvCols as never, csvRows as never)}
+                className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white transition-colors"
+              >
+                <Download size={13} /> Export CSV
+              </button>
             )}
           </div>
-          {!loading && filtered.length > 0 && (
-            <button
-              onClick={() => exportToCsv("account-intelligence", csvCols as never, csvRows as never)}
-              className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white transition-colors"
-            >
-              <Download size={13} /> Export CSV
-            </button>
+
+          {loading && (
+            <div className="flex items-center justify-center h-64 gap-2 text-gray-400 text-sm bg-white border border-t-0 border-gray-200 rounded-b-xl">
+              <Loader2 size={18} className="animate-spin" /> Loading AI signals…
+            </div>
+          )}
+          {!loading && error && (
+            <div className="flex items-center justify-center h-64 text-red-500 text-sm bg-white border border-t-0 border-gray-200 rounded-b-xl">{error}</div>
+          )}
+          {!loading && !error && (
+            <div className="border border-t-0 border-gray-200 rounded-b-xl shadow-sm bg-white">
+              {/* Column headers */}
+              <div
+                className="sticky z-10 bg-white border-b border-gray-200 grid text-xs font-semibold"
+                style={{ top: titleBarHeight, color: "#111827", gridTemplateColumns: GRID, gap: GAP, padding: "10px 20px" }}
+              >
+                {COLS.map((c) => (
+                  <span
+                    key={c.key}
+                    onClick={c.sort ? () => setSort({ col: c.key, dir: sort.col === c.key && sort.dir === "desc" ? "asc" : "desc" }) : undefined}
+                    className={c.sort ? "cursor-pointer hover:opacity-70 inline-flex items-center gap-0.5" : ""}
+                  >
+                    {c.key}
+                    {c.sort && sort.col === c.key && (
+                      sort.dir === "asc" ? <ArrowUp size={10} className="shrink-0" /> : <ArrowDown size={10} className="shrink-0" />
+                    )}
+                  </span>
+                ))}
+              </div>
+
+              {sorted.length === 0 ? (
+                <div className="flex items-center justify-center h-40 text-gray-400 text-sm">No signals match filters</div>
+              ) : (
+                sorted.map((row, i) => {
+                  const link   = row["Source Link"] as string | null;
+                  const domain = (row["Domain"] as string) || extractDomain(link);
+
+                  return (
+                    <div
+                      key={i}
+                      className="grid border-b border-gray-100 hover:bg-gray-50 transition-colors items-start"
+                      style={{ gridTemplateColumns: GRID, gap: GAP, padding: "11px 20px" }}
+                    >
+                      {/* # */}
+                      <div className="text-xs text-gray-400 tabular-nums pt-0.5">{i + 1}</div>
+
+                      {/* District (Organization in DB) */}
+                      <div className="text-xs text-gray-700 leading-snug pt-0.5 truncate">
+                        {(row["Organization"] as string) || "—"}
+                      </div>
+
+                      {/* Domain */}
+                      <div className="text-xs text-gray-600 leading-snug pt-0.5 truncate">
+                        {domain || "—"}
+                      </div>
+
+                      {/* State */}
+                      <div className="text-xs text-gray-600 pt-0.5">
+                        {(row["State"] as string) || "—"}
+                      </div>
+
+                      {/* Campaign */}
+                      <div className="text-xs text-gray-600 pt-0.5">
+                        {(row["Campaign #"] as string) || "—"}
+                      </div>
+
+                      {/* Keywords */}
+                      <div className="text-xs text-gray-800 leading-snug pt-0.5 break-words">
+                        {(row["Keywords"] as string) || "—"}
+                      </div>
+
+                      {/* Source Link */}
+                      <div className="text-xs pt-0.5">
+                        {link ? (
+                          <a href={link} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-0.5 text-blue-600 hover:text-blue-800 transition-colors"
+                            title={link}>
+                            <span className="truncate max-w-[72px] inline-block">{domain}</span>
+                            <ExternalLink size={10} className="shrink-0" />
+                          </a>
+                        ) : "—"}
+                      </div>
+
+                      {/* Date */}
+                      <div className="text-xs text-gray-500 tabular-nums pt-0.5">
+                        {fmtDate(row["Date"])}
+                      </div>
+
+                      {/* Category */}
+                      <div className="text-xs text-gray-700 leading-snug pt-0.5 break-words">
+                        {(row["Category"] as string) || "—"}
+                      </div>
+
+                      {/* Source */}
+                      <div className="text-xs text-gray-600 leading-snug pt-0.5 truncate">
+                        {(row["Source"] as string) || "—"}
+                      </div>
+
+                      {/* Signal Analysis */}
+                      <div className="text-xs text-gray-800 leading-relaxed pt-0.5 break-words">
+                        {(row["Signal Analysis"] as string) || "—"}
+                      </div>
+
+                      {/* Source Text */}
+                      <div className="text-xs text-gray-500 pt-0.5 break-words leading-snug">
+                        {(row["Source Text"] as string) || "—"}
+                      </div>
+
+                      {/* Strength */}
+                      <div className="text-xs text-gray-600 tabular-nums pt-0.5">
+                        {row["Strength"] !== null && row["Strength"] !== undefined && row["Strength"] !== "" ? String(row["Strength"]) : "—"}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           )}
         </div>
-
-        {loading && (
-          <div className="flex items-center justify-center h-64 gap-2 text-gray-400 text-sm bg-white border border-t-0 border-gray-200 rounded-b-xl">
-            <Loader2 size={18} className="animate-spin" /> Loading account intelligence…
-          </div>
-        )}
-        {!loading && error && (
-          <div className="flex items-center justify-center h-64 text-red-500 text-sm bg-white border border-t-0 border-gray-200 rounded-b-xl">{error}</div>
-        )}
-        {!loading && !error && (
-          <div className="border border-t-0 border-gray-200 rounded-b-xl shadow-sm overflow-hidden bg-white">
-            {/* Table header */}
-            <div
-              className="sticky z-10 bg-white border-b border-gray-200 grid text-xs font-semibold px-4"
-              style={{
-                top: titleBarHeight,
-                color: "#111827",
-                gridTemplateColumns: "48px 100px 90px minmax(0,1fr) 100px 90px 100px 40px",
-                gap: "0 12px",
-                padding: "10px 20px",
-              }}
-            >
-              <span>Strength</span>
-              <span>Organization</span>
-              <span>Category</span>
-              <span>Signal Analysis</span>
-              <span>Location</span>
-              <span>Amount</span>
-              <span>Date</span>
-              <span></span>
-            </div>
-
-            {filtered.length === 0 ? (
-              <div className="flex items-center justify-center h-40 text-gray-400 text-sm">No signals match filters</div>
-            ) : (
-              filtered.map((row, i) => {
-                const sc = strengthColor(row.Strength);
-                const location = [row.Domain, row.State].filter(Boolean).join(", ");
-                return (
-                  <div
-                    key={i}
-                    className="grid border-b border-gray-100 hover:bg-gray-50 transition-colors items-start"
-                    style={{
-                      gridTemplateColumns: "48px 100px 90px minmax(0,1fr) 100px 90px 100px 40px",
-                      gap: "0 12px",
-                      padding: "12px 20px",
-                    }}
-                  >
-                    {/* Strength */}
-                    <div style={{ paddingTop: 1 }}>
-                      <span style={{
-                        display: "inline-flex", alignItems: "center", justifyContent: "center",
-                        width: 32, height: 32, borderRadius: 6,
-                        background: sc.bg, color: sc.text,
-                        fontSize: 15, fontWeight: 800, fontVariantNumeric: "tabular-nums",
-                      }}>
-                        {row.Strength ?? "—"}
-                      </span>
-                    </div>
-
-                    {/* Organization */}
-                    <div className="text-xs font-semibold text-gray-800 leading-snug" style={{ paddingTop: 4 }}>
-                      {row.Organization ?? "—"}
-                    </div>
-
-                    {/* Category */}
-                    <div className="text-xs text-gray-600 leading-snug" style={{ paddingTop: 4 }}>
-                      {row.Category ?? "—"}
-                    </div>
-
-                    {/* Signal Analysis */}
-                    <div className="text-xs text-gray-800 leading-relaxed" style={{ paddingTop: 3 }}>
-                      {row.Signal_Analysis ?? "—"}
-                    </div>
-
-                    {/* Location */}
-                    <div className="text-xs text-gray-500" style={{ paddingTop: 4 }}>
-                      {location || "—"}
-                    </div>
-
-                    {/* Amount */}
-                    <div className="text-xs font-semibold text-gray-800" style={{ paddingTop: 4 }}>
-                      {row.Amount ?? "—"}
-                    </div>
-
-                    {/* Date */}
-                    <div className="text-xs text-gray-500 tabular-nums" style={{ paddingTop: 4 }}>
-                      {fmtDate(row.Date)}
-                    </div>
-
-                    {/* Source link */}
-                    <div style={{ paddingTop: 3 }}>
-                      {row.Source_Link ? (
-                        <a href={row.Source_Link} target="_blank" rel="noopener noreferrer"
-                          className="text-blue-500 hover:text-blue-700 transition-colors"
-                          title="View source">
-                          <ExternalLink size={14} />
-                        </a>
-                      ) : null}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
       </div>
     </div>
   );
