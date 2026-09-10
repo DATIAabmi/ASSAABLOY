@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { CalendarSearch, X, RotateCcw, LogOut } from "lucide-react";
+import { CalendarSearch, X, RotateCcw, LogOut, FileSpreadsheet, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useFilter } from "@/components/FilterContext";
 import { CAMPAIGNS, campaignDateRange } from "@/lib/campaigns";
 import MultiSelectDropdown from "@/components/MultiSelectDropdown";
@@ -10,11 +11,34 @@ import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 export default function DashboardHeader({ legend }: { legend?: string }) {
   const { campaign, setCampaign, dateStart, dateEnd, setDateStart, setDateEnd, resetAll } = useFilter();
   const router = useRouter();
+  const [exporting, setExporting] = useState(false);
 
   async function handleSignOut() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
     router.refresh();
+  }
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (campaign.length) params.set("campaign", campaign.join(","));
+      if (dateStart) params.set("dateStart", dateStart);
+      if (dateEnd)   params.set("dateEnd",   dateEnd);
+      const res  = await fetch(`/api/export-excel?${params.toString()}`);
+      const blob = await res.blob();
+      const cd   = res.headers.get("Content-Disposition") ?? "";
+      const name = cd.match(/filename="([^"]+)"/)?.[1] ?? "assaabloy-export.xlsx";
+      const a    = Object.assign(document.createElement("a"), {
+        href: URL.createObjectURL(blob),
+        download: name,
+      });
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } finally {
+      setExporting(false);
+    }
   }
 
   const subtitle =
@@ -26,7 +50,7 @@ export default function DashboardHeader({ legend }: { legend?: string }) {
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-6 py-3 mb-4">
-      <div className="relative flex items-center">
+      <div className="flex items-center">
         {/* Left: ASSA ABLOY logo */}
         <div className="flex-shrink-0 flex items-center gap-4">
           <Image
@@ -41,8 +65,8 @@ export default function DashboardHeader({ legend }: { legend?: string }) {
           <div className="self-stretch w-px bg-gray-200 shrink-0" />
         </div>
 
-        {/* Center: absolutely centered in the full card */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+        {/* Center: truly centered between logo and right edge */}
+        <div className="flex-1 flex flex-col items-center justify-center text-center">
           <h1
             className="font-bold text-gray-900 leading-tight"
             style={{ fontFamily: "'Lato', sans-serif", fontSize: "30px", letterSpacing: "-0.5px" }}
@@ -87,6 +111,16 @@ export default function DashboardHeader({ legend }: { legend?: string }) {
         >
           <RotateCcw size={13} />
           Reset Filters
+        </button>
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={exporting}
+          className="flex items-center gap-1.5 px-3 py-2 text-xs text-emerald-700 hover:text-emerald-900 border border-emerald-300 hover:border-emerald-500 rounded-lg bg-white transition-colors shrink-0 disabled:opacity-60 disabled:cursor-wait"
+          title="Export all table data to Excel"
+        >
+          {exporting ? <Loader2 size={13} className="animate-spin" /> : <FileSpreadsheet size={13} />}
+          {exporting ? "Exporting…" : "Export Excel"}
         </button>
         <button
           type="button"

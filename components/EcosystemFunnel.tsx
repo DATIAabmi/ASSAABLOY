@@ -34,6 +34,7 @@ interface FunnelData {
 
 interface Stage {
   label: string;
+  cardLabel?: string;
   description: string;
   goal?: string;
   value: string;
@@ -109,30 +110,33 @@ export default function EcosystemFunnel() {
   const stages: Stage[] = [
     {
       label: "Impressions",
-      description: "Number of times your content or ads were displayed on social, offsite display",
-      goal: `Impression Goal: ${goals.impressions.toLocaleString()}`,
+      description: "Total times ads were displayed",
+      goal: `Goal: ${goals.impressions.toLocaleString()} Impressions`,
       value: fmt(data.impressions),
       goalValue: computePct(data.impressions, goals.impressions),
     },
     {
       label: "Engagements",
-      description: "Number of clicks on your ads or opened emails",
+      description: "Clicks across digital channels and email opens",
       value: fmt(data.engagements),
     },
     {
-      label: "Click Thru Rate",
-      description: "The percentage of people that click on a link or ad out of all the times they saw that ad",
+      label: "Click-Through Rate (CTR)",
+      cardLabel: "CTR",
+      description: "Percentage of impressions that generated a click",
       value: fmt(data.ctr),
     },
     {
-      label: "Engaged Users",
-      description: "Unique users who viewed your content from all sources",
+      label: "Unique Engaged Users (UEU)",
+      cardLabel: "UEU",
+      description: "Unique individuals who engaged",
       value: fmt(data.engagedUsers),
     },
     {
       label: "Leads",
-      description: "Total qualified leads generated across all channels",
-      goal: `Goal: ${goals.leads.toLocaleString()} Leads`,
+      cardLabel: "Leads",
+      description: "Content downloads by target personas",
+      goal: `Goal: ${goals.leads.toLocaleString()} Downloads`,
       value: fmt(data.leads),
       goalValue: computePct(data.leads, goals.leads),
     },
@@ -195,7 +199,7 @@ export default function EcosystemFunnel() {
                     className="block uppercase tracking-widest text-gray-400 font-semibold"
                     style={{ fontSize: 11, marginBottom: 2 }}
                   >
-                    {stage.label}
+                    {stage.cardLabel ?? stage.label}
                   </span>
                   <span
                     className="block font-black text-white tabular-nums"
@@ -215,7 +219,7 @@ export default function EcosystemFunnel() {
                       className="block uppercase tracking-widest text-gray-400 font-semibold"
                       style={{ fontSize: 9, marginBottom: 2 }}
                     >
-                      % to Goal
+                      % OF GOAL
                     </span>
                     <span
                       className="block font-black text-white tabular-nums"

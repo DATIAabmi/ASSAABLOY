@@ -46,7 +46,7 @@ function DonutChart({ rows }: { rows: Row[] }) {
             />
           ))}
           {/* Center label */}
-          <text x={CX} y={CY - 8} textAnchor="middle" fontSize={10} fill="#6b7280" fontFamily="inherit">Total Clicks</text>
+          <text x={CX} y={CY - 8} textAnchor="middle" fontSize={10} fill="#6b7280" fontFamily="inherit">Total Engagements</text>
           <text x={CX} y={CY + 12} textAnchor="middle" fontSize={15} fontWeight="700" fill="#111827" fontFamily="inherit">
             {fmtNum(total)}
           </text>
@@ -75,7 +75,12 @@ function DonutChart({ rows }: { rows: Row[] }) {
   );
 }
 
-export default function ChannelPerformanceChart() {
+interface Props {
+  filterChannel?: string[];
+  onChannelsLoaded?: (channels: string[]) => void;
+}
+
+export default function ChannelPerformanceChart({ filterChannel, onChannelsLoaded }: Props) {
   const { campaign, dateStart, dateEnd } = useFilter();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,9 +96,18 @@ export default function ChannelPerformanceChart() {
     const qs = params.toString();
     fetch(`/api/q363-data${qs ? `?${qs}` : ""}`)
       .then((r) => r.json())
-      .then((d) => { setRows(d.rows ?? []); setLoading(false); })
+      .then((d) => {
+        const loaded: Row[] = d.rows ?? [];
+        setRows(loaded);
+        setLoading(false);
+        onChannelsLoaded?.(loaded.map((r) => r[0]));
+      })
       .catch(() => { setError("Failed to load"); setLoading(false); });
-  }, [campaign, dateStart, dateEnd]);
+  }, [campaign, dateStart, dateEnd]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const visibleRows = filterChannel && filterChannel.length > 0
+    ? rows.filter((r) => filterChannel.includes(r[0]))
+    : rows;
 
   if (loading) {
     return (
@@ -106,5 +120,5 @@ export default function ChannelPerformanceChart() {
     return <div className="flex items-center justify-center h-64 text-red-500 text-sm">{error}</div>;
   }
 
-  return <DonutChart rows={rows} />;
+  return <DonutChart rows={visibleRows} />;
 }

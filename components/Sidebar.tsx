@@ -16,7 +16,6 @@ import {
   ScrollText,
   Sparkles,
   MapPin,
-  Building2,
 } from "lucide-react";
 
 const navItems = [
@@ -29,8 +28,7 @@ const navItems = [
   { label: "Topic Insights", icon: BookOpen, href: "/topic-insights" },
   { label: "Content Insights", icon: FileText, href: "/content-insights" },
   { label: "Ad Samples", icon: MonitorPlay, href: "/ad-samples" },
-  { label: "AI Opportunity Feed", icon: Sparkles, href: "/ai-opportunity-feed" },
-  { label: "Account Intelligence", icon: Building2, href: "/account-intelligence" },
+  { label: "Account Intelligence", icon: Sparkles, href: "/ai-opportunity-feed" },
 ];
 
 export default function Sidebar() {
