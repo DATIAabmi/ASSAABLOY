@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ASSA ABLOY | Analytics Portal",
-  description: "Analytics Portal",
+  title: "ASSA ABLOY | Intelligence Dashboard",
+  description: "Intelligence Dashboard",
 };
 
 export default function RootLayout({
