@@ -180,7 +180,7 @@ function LoginForm() {
         </div>
 
         <p style={{ marginTop: 20, textAlign: "center", fontSize: 11, color: "#475569" }}>
-          ASSA ABLOY · Intelligence Dashboard
+          DATIA K12
         </p>
       </div>
     </div>
