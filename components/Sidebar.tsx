@@ -28,10 +28,10 @@ const navItems = [
   { label: "Topic Insights", icon: BookOpen, href: "/topic-insights" },
   { label: "Content Insights", icon: FileText, href: "/content-insights" },
   { label: "Ad Samples", icon: MonitorPlay, href: "/ad-samples" },
-  // RAS has since hidden School Board Minutes from its nav ("re-enable when
-  // ready") but we just wired this tab up with real ASSA ABLOY data, so
-  // keeping it visible here rather than silently dropping a working feature.
-  { label: "School Board Minutes", icon: ScrollText, href: "/school-board-minutes" },
+  // Hidden to match RAS's current nav exactly ("re-enable when ready" there
+  // too) — the page/route still works with real ASSA ABLOY data at
+  // /school-board-minutes, just not linked from the sidebar.
+  // { label: "School Board Minutes", icon: ScrollText, href: "/school-board-minutes" },
 ];
 
 export default function Sidebar() {
