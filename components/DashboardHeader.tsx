@@ -51,12 +51,12 @@ export default function DashboardHeader({ legend }: { legend?: string }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-6 py-3 mb-4">
       <div className="flex items-center">
-        {/* Left: ASSA ABLOY logo */}
+        {/* Left: COMLO Solutions logo */}
         <div className="flex-shrink-0 flex items-center gap-4">
           <Image
-            src="/assaabloy-logo.svg"
-            alt="ASSA ABLOY"
-            width={370}
+            src="/comlo-logo.png"
+            alt="COMLO Solutions"
+            width={300}
             height={100}
             style={{ height: "76px", width: "auto" }}
             className="object-contain"
