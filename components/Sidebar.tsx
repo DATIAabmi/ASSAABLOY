@@ -56,10 +56,10 @@ export default function Sidebar() {
           </p>
         )}
         <Image
-          src="/datia-k12-logo.png"
-          alt="DATIA K12"
+          src="/datia-logo.png"
+          alt="DATIA"
           width={140}
-          height={40}
+          height={38}
           priority
         />
         <p className="text-[10px] font-semibold tracking-widest text-gray-400 uppercase mt-2">
