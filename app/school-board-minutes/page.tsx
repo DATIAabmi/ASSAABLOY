@@ -8,6 +8,7 @@ import { useFilter } from "@/components/FilterContext";
 import MetabaseProviderWrapper from "@/components/MetabaseProvider";
 import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 import { exportToCsv } from "@/lib/exportCsv";
+import { fmtDate } from "@/lib/fmtDate";
 
 const KEYWORDS = ["after school", "child care", "head start", "enrichment"];
 
@@ -104,21 +105,21 @@ function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
 
   return (
     <div className="bg-white">
-      <table className="text-sm border-collapse w-full table-fixed">
+      <table className="text-xs border-collapse w-full table-fixed">
         <colgroup>
           <col style={{ width: 36 }} />   {/* # */}
           <col style={{ width: 140 }} />  {/* District */}
-          <col style={{ width: 110 }} />  {/* Domain */}
-          <col style={{ width: 72 }} />   {/* State */}
-          <col style={{ width: 96 }} />   {/* Campaign */}
-          <col style={{ width: 96 }} />   {/* SBM Date */}
-          <col style={{ width: 90 }} />   {/* Keyword */}
+          <col style={{ width: 120 }} />  {/* Domain */}
+          <col style={{ width: 44 }} />   {/* State */}
+          <col style={{ width: 72 }} />   {/* Campaign */}
+          <col style={{ width: 88 }} />   {/* SBM Date */}
+          <col style={{ width: 110 }} />  {/* Keyword */}
           <col />                         {/* SBM Context — takes remaining space */}
           <col style={{ width: 56 }} />   {/* SBM Link */}
         </colgroup>
         <thead>
           <tr className="border-b border-gray-200">
-            <th className="sticky z-10 bg-white px-3 py-2 text-right font-semibold whitespace-nowrap border-b border-gray-200" style={{ color: "#111827", top: headerTop }}>#</th>
+            <th className="sticky z-10 bg-white px-2 py-2 text-right font-bold whitespace-nowrap border-b border-gray-200" style={{ color: "#111827", top: headerTop }}>#</th>
             {COL_ORDER.map((j) => {
               const col = cols[j];
               if (!col) return null;
@@ -128,7 +129,7 @@ function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
               return (
                 <th key={j}
                   onClick={() => sortable && onSort({ col: j, dir: active && sort.dir === "desc" ? "asc" : "desc" })}
-                  className={`sticky z-10 bg-white px-4 py-3 font-semibold border-b border-gray-200 ${sortable ? "cursor-pointer select-none hover:opacity-70" : ""}`}
+                  className={`sticky z-10 bg-white px-2 py-2 font-bold border-b border-gray-200 ${sortable ? "cursor-pointer select-none hover:opacity-70" : ""}`}
                   style={{ color: "#111827", textAlign: j === 1 ? "center" : "left", top: headerTop }}
                 >
                   <span className="inline-flex items-center gap-1">
@@ -152,7 +153,7 @@ function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
                 // SBM Link (index 7) — clickable link
                 if (j === 7 && val) {
                   return (
-                    <td key={j} className="px-4 py-1.5 text-left whitespace-nowrap">
+                    <td key={j} className="px-2 py-1.5 text-center whitespace-nowrap">
                       <a href={val} target="_blank" rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline text-xs font-medium">
                         View <ExternalLink size={11} />
@@ -163,7 +164,7 @@ function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
                 // SBM Context (index 6) — allow wrapping for long text
                 if (j === 6) {
                   return (
-                    <td key={j} className="px-4 py-1.5 text-left text-gray-800">
+                    <td key={j} className="px-2 py-1.5 text-left text-gray-800">
                       <span className="line-clamp-3 block text-xs leading-relaxed break-words">{val}</span>
                     </td>
                   );
@@ -171,10 +172,16 @@ function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
                 // Campaign (index 1) — show short code only e.g. "C6"
                 // SBM Date (index 4) — strip ISO timestamp, show date only
                 const display = j === 1 ? val.split(":")[0].trim()
-                  : j === 4 ? val.replace(/T.*$/, "")
+                  : j === 4 ? fmtDate(val)
                   : val;
+                // District(0): wrap at word boundaries; Domain(2): break-all for URLs;
+                // Keyword(5): truncate with ellipsis; others: nowrap
+                const cellClass = j === 0 ? "break-words"
+                  : j === 2 ? "break-all"
+                  : j === 5 ? "truncate"
+                  : "whitespace-nowrap";
                 return (
-                  <td key={j} className={`px-4 py-1.5 text-gray-800 text-xs ${j === 0 ? "break-words" : "whitespace-nowrap"}`}
+                  <td key={j} className={`px-2 py-1.5 text-gray-800 text-xs ${cellClass}`}
                     style={{ textAlign: j === 1 ? "center" : "left" }}>{display}</td>
                 );
               })}
@@ -306,7 +313,7 @@ function SchoolBoardContent() {
 
   return (
     <MetabaseProviderWrapper>
-      <div style={{ position: "fixed", top: 0, left: "16rem", right: 0, bottom: 0,
+      <div style={{ position: "fixed", top: 0, left: "12rem", right: 0, bottom: 0,
                     display: "flex", flexDirection: "column", background: "#f9fafb", zIndex: 1 }}>
         <div style={{ flexShrink: 0, padding: "16px 24px 0" }}>
           <DashboardHeader />

@@ -8,7 +8,8 @@ import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type GatedRow = [string, string, string, number | string, number | string, string];
+// Card 205 cols: 0=Image 1=AssetName 2=AssetLink 3=Campaign 4=Impressions 5=Clicks 6=CTR
+type GatedRow = [string, string, string, string, number | string, number | string, string];
 type ChannelBreakdownRow = [string, number, number, number | string];
 type ChannelClickRow = [string, number, number];
 
@@ -35,7 +36,7 @@ function fmtNum(v: number | string | null | undefined): string {
 function fmtPct(v: number | string | null | undefined): string {
   if (v === null || v === undefined) return "—";
   if (typeof v === "string") return v;
-  return (v * 100).toFixed(2) + "%";
+  return v.toFixed(2) + "%";
 }
 
 // ─── Scalar Card ──────────────────────────────────────────────────────────────
@@ -150,7 +151,7 @@ function GatedContentTable({ campaign, dateStart, dateEnd }: { campaign: string[
   const [rows, setRows] = useState<GatedRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [sort, setSort] = useState<SortState>({ col: 3, dir: "desc" });
+  const [sort, setSort] = useState<SortState>({ col: 4, dir: "desc" });
 
   const titleBarRef = useRef<HTMLDivElement>(null);
   const [titleBarHeight, setTitleBarHeight] = useState(0);
@@ -182,9 +183,10 @@ function GatedContentTable({ campaign, dateStart, dateEnd }: { campaign: string[
   const HEADERS = [
     { label: "Image",             col: -1 },
     { label: "Asset Name & Link", col: 1 },
-    { label: "Impressions",       col: 3 },
-    { label: "Clicks",            col: 4 },
-    { label: "CTR",               col: 5 },
+    { label: "Campaign",          col: 3 },
+    { label: "Impressions",       col: 4 },
+    { label: "Clicks",            col: 5 },
+    { label: "CTR",               col: 6 },
   ];
 
   const sorted = [...rows].sort((a, b) => {
@@ -222,9 +224,9 @@ function GatedContentTable({ campaign, dateStart, dateEnd }: { campaign: string[
               <tr className="border-b border-gray-200">
                 {HEADERS.map((h) => (
                   <th key={h.label} onClick={() => handleSort(h.col)}
-                    className={`sticky z-10 bg-white px-4 py-3 font-semibold whitespace-nowrap select-none border-b border-gray-200 ${h.col >= 0 ? "cursor-pointer hover:opacity-70" : ""} ${h.col >= 3 ? "text-right" : "text-left"}`}
+                    className={`sticky z-10 bg-white px-4 py-3 font-semibold whitespace-nowrap select-none border-b border-gray-200 ${h.col >= 0 ? "cursor-pointer hover:opacity-70" : ""} ${h.col === 3 ? "text-center" : h.col >= 4 ? "text-right" : "text-left"}`}
                     style={{ color: "#111827", top: titleBarHeight }}>
-                    <span className={`inline-flex items-center gap-1 ${h.col >= 3 ? "justify-end" : "justify-start"}`}>
+                    <span className={`inline-flex items-center gap-1 ${h.col === 3 ? "justify-center" : h.col >= 4 ? "justify-end" : "justify-start"}`}>
                       {h.label}
                       {h.col >= 0 && (
                         sort.col === h.col
@@ -257,11 +259,29 @@ function GatedContentTable({ campaign, dateStart, dateEnd }: { campaign: string[
                       <span className="text-gray-800 font-medium">{String(row[1] ?? "")}</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-gray-800 whitespace-nowrap">{fmtNum(row[3])}</td>
+                  <td className="px-4 py-3 text-center text-gray-700 whitespace-nowrap text-xs font-medium">
+                    {String(row[3] ?? "").split(":")[0].trim()}
+                  </td>
                   <td className="px-4 py-3 text-right tabular-nums text-gray-800 whitespace-nowrap">{fmtNum(row[4])}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-gray-800 whitespace-nowrap">{String(row[5] ?? "")}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-gray-800 whitespace-nowrap">{fmtNum(row[5])}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-gray-800 whitespace-nowrap">{String(row[6] ?? "")}</td>
                 </tr>
               ))}
+              {sorted.length > 0 && (() => {
+                const totalImp = sorted.reduce((s, r) => s + (parseFloat(String(r[4] ?? 0)) || 0), 0);
+                const totalClk = sorted.reduce((s, r) => s + (parseFloat(String(r[5] ?? 0)) || 0), 0);
+                const totalCtr = totalImp > 0 ? `${((totalClk / totalImp) * 100).toFixed(2)}%` : "—";
+                return (
+                  <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
+                    <td className="px-4 py-3" />
+                    <td className="px-4 py-3 text-gray-900">Grand total</td>
+                    <td className="px-4 py-3" />
+                    <td className="px-4 py-3 text-right tabular-nums text-gray-900 whitespace-nowrap">{Math.round(totalImp).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-gray-900 whitespace-nowrap">{Math.round(totalClk).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-gray-900 whitespace-nowrap">{totalCtr}</td>
+                  </tr>
+                );
+              })()}
             </tbody>
           </table>
         </div>
@@ -321,7 +341,7 @@ export default function Page() {
     : data?.ctr ?? null;
 
   return (
-    <div style={{ position: "fixed", top: 0, left: "16rem", right: 0, bottom: 0,
+    <div style={{ position: "fixed", top: 0, left: "12rem", right: 0, bottom: 0,
                   display: "flex", flexDirection: "column", background: "#f9fafb", zIndex: 1 }}>
       <div style={{ flexShrink: 0, padding: "16px 24px 0" }}>
         <DashboardHeader />

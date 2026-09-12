@@ -80,7 +80,8 @@ export async function GET(req: NextRequest) {
     const campaigns = (searchParams.get("campaign") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
     const dateStart = searchParams.get("dateStart") ?? "";
     const dateEnd   = searchParams.get("dateEnd")   ?? "";
-    return cachedJson({ rows: await getRows(campaigns, dateStart, dateEnd) });
+    const rows = await getRows(campaigns, dateStart, dateEnd);
+    return rows.length > 0 ? cachedJson({ rows }) : NextResponse.json({ rows });
   } catch {
     return NextResponse.json({ rows: [] }, { status: 200 });
   }

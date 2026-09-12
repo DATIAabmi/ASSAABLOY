@@ -18,10 +18,10 @@ function fetchFieldOptions(field: "district" | "domain" | "state") {
 // ─── Definitions modal ────────────────────────────────────────────────────────
 
 const DEFINITIONS = [
-  { term: "SBM", def: "School Board Minutes. The SBM Link directs to the school board minutes document." },
+  { term: "Intel", def: "Account Intelligence signals including School Board Minutes, RFPs/Bids, Grants/Bonds, Strategic Initiatives, Leadership Changes, and District News. See the Account Intelligence dashboard for details." },
   { term: "Topic", def: "Intent signals based on content consumption. See Topic Insights dashboard." },
   { term: "Engagements", def: "The number of clicks on your ads, email opens and lead downloads." },
-  { term: "Intent Score", def: "A numerical value that indicates a lead/district's likelihood to be in market derived from district data and total engagement on and off the ASSA ABLOY channels." },
+  { term: "Intent Score", def: "A numerical value that indicates a district's likelihood to be in market derived from district data and total engagement" },
 ];
 
 function DefinitionsModal({ onClose }: { onClose: () => void }) {
@@ -40,7 +40,7 @@ function DefinitionsModal({ onClose }: { onClose: () => void }) {
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "#111" }}>Definitions</span>
+          <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "#111" }}>Metric Descriptions</span>
           <button type="button" onClick={onClose} style={{ color: "#9ca3af", cursor: "pointer", background: "none", border: "none", padding: 0 }}>
             <X size={16} />
           </button>
@@ -187,7 +187,6 @@ const SCORE_TREND_COL = 11;
 // Shorter/matches-reference labels so multi-word headers can wrap onto two
 // lines instead of forcing extra column width.
 const HEADER_LABELS: Record<string, string> = {
-  State: "ST",
   Downloads: "Total Downloads",
   "Score Trend": "Intent Score Trend",
 };
@@ -227,7 +226,7 @@ function DataTable({
 
   return (
     <div className="bg-white">
-      <table className="text-xs border-collapse min-w-full">
+      <table className="text-xs border-collapse" style={{ minWidth: 1200 }}>
         <thead>
           <tr className="border-b border-gray-200">
             <th className="sticky z-10 bg-white px-2 py-2 w-8 text-[11px] font-bold text-gray-900 border-b border-gray-200" style={{ textAlign: "center", top: headerTop }}>#</th>
@@ -239,9 +238,9 @@ function DataTable({
                 <th key={j}
                   onClick={() => onSort({ col: j, dir: active && sort.dir === "desc" ? "asc" : "desc" })}
                   className="sticky z-10 bg-white px-2 py-2 font-bold text-gray-900 cursor-pointer select-none hover:opacity-70 leading-tight border-b border-gray-200"
-                  style={{ textAlign: left ? "left" : "center", top: headerTop }}>
-                  <span className={`inline-flex items-center gap-0.5 ${left ? "justify-start" : "justify-center"}`}>
-                    {label}
+                  style={{ textAlign: left ? "left" : "center", top: headerTop, ...(col.display_name === "Engagements" ? { minWidth: 100 } : {}) }}>
+                  <span className={`inline-flex flex-wrap items-center gap-0.5 ${left ? "justify-start" : "justify-center"}`}>
+                    <span style={col.display_name === "Engagements" ? { whiteSpace: "nowrap" } : undefined}>{label}</span>
                     {active && (sort.dir === "asc" ? <ArrowUp size={10} className="shrink-0" /> : <ArrowDown size={10} className="shrink-0" />)}
                   </span>
                 </th>
@@ -323,7 +322,7 @@ function EngagedUsersContent() {
     fetch(`/api/q405-data?${params.toString()}`)
       .then((r) => r.json())
       .then((d) => {
-        if (d.error) throw new Error(d.error);
+        if (d.error) throw new Error(d.error ?? "Unknown error from q405-data");
         setCols(d.cols);
         setRows(d.rows);
         setLoading(false);
@@ -341,7 +340,7 @@ function EngagedUsersContent() {
   }, [resetSignal]);
 
   return (
-    <div style={{ position: "fixed", top: 0, left: "16rem", right: 0, bottom: 0,
+    <div style={{ position: "fixed", top: 0, left: "12rem", right: 0, bottom: 0,
                   display: "flex", flexDirection: "column", background: "#f9fafb", zIndex: 1 }}>
       <div style={{ flexShrink: 0, padding: "16px 24px 0" }}>
         <DashboardHeader />
@@ -358,7 +357,7 @@ function EngagedUsersContent() {
               className="flex items-center gap-1.5 px-3 py-2 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 rounded-lg bg-white transition-colors shrink-0"
             >
               <Info size={13} />
-              Definitions
+              Metric Descriptions
             </button>
           </div>
           <SortDropdown sort={sort} onSort={setSort} />
@@ -367,8 +366,9 @@ function EngagedUsersContent() {
         {showDefs && <DefinitionsModal onClose={() => setShowDefs(false)} />}
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: "scroll", overflowX: "hidden", padding: "0 24px 24px" }} className="eu-scroll">
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", WebkitOverflowScrolling: "touch", padding: "0 24px 24px" }} className="eu-scroll">
         <style>{`.eu-scroll::-webkit-scrollbar{width:10px}.eu-scroll::-webkit-scrollbar-track{background:#e5e7eb;border-radius:5px}.eu-scroll::-webkit-scrollbar-thumb{background:#6b7280;border-radius:5px}.eu-scroll::-webkit-scrollbar-thumb:hover{background:#374151}`}</style>
+        <div style={{ minWidth: 1200, width: "100%" }}>
         <div ref={titleBarRef} className="sticky top-0 z-20 bg-gray-900 text-white px-5 py-3 rounded-t-xl flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="font-bold text-sm tracking-wide uppercase">Engaged Users By District</span>
@@ -389,11 +389,12 @@ function EngagedUsersContent() {
           <div className="flex items-center justify-center h-64 text-red-500 text-sm bg-white border border-t-0 border-gray-200 rounded-b-xl">{error}</div>
         )}
         {!loading && !error && (
-          <div className="border border-t-0 border-gray-200 rounded-b-xl shadow-sm" style={{ clipPath: "inset(0 round 0 0 0.75rem 0.75rem)" }}>
+          <div className="border border-t-0 border-gray-200 rounded-b-xl shadow-sm overflow-hidden">
             <DataTable cols={cols} rows={rows} sort={sort} onSort={setSort} headerTop={titleBarHeight}
               onDistrictClick={(d) => router.push(`/school-board-minutes?district=${encodeURIComponent(d)}`)} />
           </div>
         )}
+        </div>
       </div>
     </div>
   );

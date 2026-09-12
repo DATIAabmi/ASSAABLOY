@@ -1,83 +1,58 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { cachedJson } from "@/lib/apiCache";
 
 const METABASE_URL = process.env.NEXT_PUBLIC_METABASE_URL!;
 const API_KEY = process.env.METABASE_ADMIN_API_KEY!;
+const DB_ID = 34;
+
+const AD_TABLE = "`prj-datia-prod-e530.df_gcp_campaign_cbl_prod.prod_cbl_assaabloy_202602_ad_performance`";
+const SC_TABLE = "`prj-datia-prod-e530.df_gcp_campaign_cbl_prod.prod_cbl_assaabloy_202602_scoring`";
 
 const CACHE_TTL_MS = 30 * 60 * 1000;
 type FunnelResult = { impressions: unknown; engagements: unknown; ctr: unknown; engagedUsers: unknown; leads: unknown };
 const memCache = new Map<string, { data: FunnelResult; ts: number }>();
 const inflight = new Map<string, Promise<FunnelResult>>();
 
-function buildParams(campaign: string, dateStart: string, dateEnd: string): object[] {
-  const params: object[] = [];
-  if (campaign) {
-    params.push({
-      id: "campaign",
-      type: "string/=",
-      value: campaign,
-      target: ["variable", ["template-tag", "Abmi_Campaign"]],
-    });
-  }
-  if (dateStart && dateEnd) {
-    params.push({
-      id: "date",
-      type: "date/range",
-      value: `${dateStart}~${dateEnd}`,
-      target: ["dimension", ["template-tag", "Date"]],
-    });
-  }
-  return params;
+function sqlStr(v: string): string {
+  return `'${v.replace(/'/g, "''")}'`;
 }
 
-// Cards 308 (Engaged Users) and 314 (Leads) filter on the actual per-event
-// date nested inside the `engagement` array (via UNNEST), not a row-level
-// column — Metabase's auto-generated field-filter SQL can't target that, so
-// these two cards take plain date variables instead of the Date dimension.
-function buildLeadsParams(campaign: string, dateStart: string, dateEnd: string): object[] {
-  const params: object[] = [];
-  if (campaign) {
-    params.push({
-      id: "campaign",
-      type: "string/=",
-      value: campaign,
-      target: ["variable", ["template-tag", "Abmi_Campaign"]],
-    });
-  }
-  if (dateStart) {
-    params.push({
-      id: "start_date",
-      type: "date/single",
-      value: dateStart,
-      target: ["variable", ["template-tag", "start_date"]],
-    });
-  }
-  if (dateEnd) {
-    params.push({
-      id: "end_date",
-      type: "date/single",
-      value: dateEnd,
-      target: ["variable", ["template-tag", "end_date"]],
-    });
-  }
-  return params;
+async function runSQL(sql: string): Promise<unknown[] | null> {
+  const res = await fetch(`${METABASE_URL}/api/dataset`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
+    body: JSON.stringify({ database: DB_ID, type: "native", native: { query: sql }, middleware: { "js-int-to-string?": true } }),
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const rows: unknown[][] = data.data?.rows ?? [];
+  return rows[0] ?? null;
 }
 
-async function fetchScalar(cardId: number, params: object[]): Promise<string | number | null> {
-  try {
-    const res = await fetch(`${METABASE_URL}/api/card/${cardId}/query`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
-      body: JSON.stringify({ parameters: params }),
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const rows = data.data?.rows ?? [];
-    return rows[0]?.[0] ?? null;
-  } catch {
-    return null;
-  }
+async function fetchFunnelForCampaign(campaign: string, dateStart: string, dateEnd: string): Promise<FunnelResult> {
+  const campaignClause = campaign ? `AND abmi_campaign = ${sqlStr(campaign)}` : "";
+  const dateClause = dateStart && dateEnd
+    ? `AND DATE(date) BETWEEN ${sqlStr(dateStart)} AND ${sqlStr(dateEnd)}`
+    : "";
+
+  const scoringCampaignClause = campaign ? `AND sc.Abmi_Campaign = ${sqlStr(campaign)}` : "";
+
+  const [r_imp, r_eng, r_ctr, r_egu, r_leads] = await Promise.all([
+    runSQL(`SELECT SUM(impressions) FROM ${AD_TABLE} WHERE 1=1 ${campaignClause} ${dateClause}`),
+    runSQL(`SELECT COALESCE(SUM(clicks), 0) FROM ${AD_TABLE} WHERE 1=1 ${campaignClause} ${dateClause}`),
+    runSQL(`SELECT CONCAT(ROUND(SAFE_DIVIDE(SUM(clicks), SUM(impressions)) * 100, 2), '%') FROM ${AD_TABLE} WHERE 1=1 ${campaignClause} ${dateClause}`),
+    runSQL(`SELECT COUNT(DISTINCT sc.engaged_user) FROM ${SC_TABLE} sc WHERE sc.engaged_user IS NOT NULL ${scoringCampaignClause}`),
+    runSQL(`SELECT COUNT(item.channel) FROM ${SC_TABLE} sc, UNNEST(sc.engagement) AS item WHERE sc.leads IS NOT NULL AND sc.leads != '' AND item.channel = 'Leads' ${scoringCampaignClause}`),
+  ]);
+
+  return {
+    impressions:  r_imp?.[0]   ?? null,
+    engagements:  r_eng?.[0]   ?? null,
+    ctr:          r_ctr?.[0]   ?? null,
+    engagedUsers: r_egu?.[0]   ?? null,
+    leads:        r_leads?.[0] ?? null,
+  };
 }
 
 function sum(values: (string | number | null)[]): number | null {
@@ -86,29 +61,12 @@ function sum(values: (string | number | null)[]): number | null {
   return nums.reduce((a, b) => a + b, 0);
 }
 
-// ctr scalars come back pre-formatted (e.g. "1.72%"), so strip non-numeric
-// characters before averaging, then re-format to match that same shape.
 function avgPct(values: (string | number | null)[]): string | null {
   const nums = values
     .map((v) => (typeof v === "string" ? parseFloat(v.replace(/[^0-9.-]/g, "")) : Number(v)))
     .filter((n) => !isNaN(n));
   if (nums.length === 0) return null;
-  const avg = nums.reduce((a, b) => a + b, 0) / nums.length;
-  return `${avg.toFixed(2)}%`;
-}
-
-async function fetchFunnelForCampaign(campaign: string, dateStart: string, dateEnd: string) {
-  const params = buildParams(campaign, dateStart, dateEnd);
-  const engagementParams = buildLeadsParams(campaign, dateStart, dateEnd);
-  const [impressions, engagements, ctr, engagedUsers, leads] =
-    await Promise.all([
-      fetchScalar(526, params),
-      fetchScalar(527, params),
-      fetchScalar(528, params),
-      fetchScalar(529, engagementParams),
-      fetchScalar(530, engagementParams),
-    ]);
-  return { impressions, engagements, ctr, engagedUsers, leads };
+  return `${(nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(2)}%`;
 }
 
 async function getResult(campaigns: string[], dateStart: string, dateEnd: string): Promise<FunnelResult> {
@@ -123,11 +81,11 @@ async function getResult(campaigns: string[], dateStart: string, dateEnd: string
       } else {
         const perCampaign = await Promise.all(campaigns.map((c) => fetchFunnelForCampaign(c, dateStart, dateEnd)));
         result = {
-          impressions:  sum(perCampaign.map((r) => r.impressions)),
-          engagements:  sum(perCampaign.map((r) => r.engagements)),
-          ctr:          avgPct(perCampaign.map((r) => r.ctr)),
-          engagedUsers: sum(perCampaign.map((r) => r.engagedUsers)),
-          leads:        sum(perCampaign.map((r) => r.leads)),
+          impressions:  sum(perCampaign.map((r) => r.impressions  as string | number | null)),
+          engagements:  sum(perCampaign.map((r) => r.engagements  as string | number | null)),
+          ctr:          avgPct(perCampaign.map((r) => r.ctr       as string | number | null)),
+          engagedUsers: sum(perCampaign.map((r) => r.engagedUsers as string | number | null)),
+          leads:        sum(perCampaign.map((r) => r.leads        as string | number | null)),
         };
       }
       memCache.set(key, { data: result, ts: Date.now() });
@@ -145,5 +103,7 @@ export async function GET(req: NextRequest) {
   const campaigns = (searchParams.get("campaign") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   const dateStart = searchParams.get("dateStart") ?? "";
   const dateEnd   = searchParams.get("dateEnd")   ?? "";
-  return cachedJson(await getResult(campaigns, dateStart, dateEnd));
+  const result = await getResult(campaigns, dateStart, dateEnd);
+  const hasData = result.impressions !== null || result.engagements !== null;
+  return hasData ? cachedJson(result) : NextResponse.json(result);
 }

@@ -27,10 +27,11 @@ const NUMBER_TYPES = new Set(["type/Integer","type/BigInteger","type/Float","typ
 const GEO_LEFT_ALIGN_COLS = new Set<string>();
 
 function GeographyTable({
-  campaign, dateStart, dateEnd, filterDistrict, filterState,
+  campaign, dateStart, dateEnd, filterDistrict, filterState, selectedState, setSelectedState,
 }: {
   campaign: string[]; dateStart: string; dateEnd: string;
   filterDistrict: string[]; filterState: string[];
+  selectedState: string | null; setSelectedState: (s: string | null) => void;
 }) {
   const [cols, setCols] = useState<Col[]>([]);
   const [rows, setRows] = useState<GeoRow[]>([]);
@@ -42,19 +43,67 @@ function GeographyTable({
     setLoading(true);
     setError("");
     const params = new URLSearchParams();
-    if (campaign.length)       params.set("campaign", campaign.join(","));
-    if (dateStart)             params.set("dateStart", dateStart);
-    if (dateEnd)               params.set("dateEnd", dateEnd);
-    if (filterDistrict.length) params.set("district", filterDistrict.join(","));
-    if (filterState.length)    params.set("state", filterState.join(","));
+    if (dateStart) params.set("dateStart", dateStart);
+    if (dateEnd)   params.set("dateEnd", dateEnd);
 
+    if (filterDistrict.length > 0) {
+      // District filter active — fetch district-level data, then aggregate by state.
+      // Campaign filter is applied server-side via Abmi_Campaign column.
+      params.set("district", filterDistrict.join(","));
+      if (campaign.length) params.set("campaign", campaign.join(","));
+      fetch(`/api/q168-data?${params.toString()}`)
+        .then((r) => r.json())
+        .then((d: { cols?: Col[]; rows?: GeoRow[] }) => {
+          const rawCols  = d.cols  ?? [];
+          const rawRows  = d.rows  ?? [];
+          const stateIdx = rawCols.findIndex((c) => c.display_name === "State");
+          const engIdx   = rawCols.findIndex((c) => c.display_name === "Engagements");
+          const leadsIdx = rawCols.findIndex((c) => c.display_name === "Leads");
+
+          // Campaign already filtered server-side — use all returned rows directly.
+          const campFiltered = rawRows;
+
+          // Aggregate by state
+          const byState = new Map<string, { engaged: number; leads: number }>();
+          for (const row of campFiltered) {
+            const state = String(row[stateIdx] ?? "");
+            if (!state) continue;
+            if (!byState.has(state)) byState.set(state, { engaged: 0, leads: 0 });
+            const t = byState.get(state)!;
+            t.engaged += Number(row[engIdx])   || 0;
+            t.leads   += Number(row[leadsIdx]) || 0;
+          }
+
+          setCols([
+            { display_name: "State",         base_type: "type/Text"    },
+            { display_name: "Engaged Users",  base_type: "type/Integer" },
+            { display_name: "Leads",          base_type: "type/Integer" },
+          ]);
+          setRows([...byState.entries()].map(([state, { engaged, leads }]) => [state, engaged, leads]));
+          setSort({ col: 1, dir: "desc" });
+          setLoading(false);
+        })
+        .catch((err: Error) => { setError(err.message ?? "Failed to load"); setLoading(false); });
+      return;
+    }
+
+    // No district filter — use Card 169 state-level aggregated data.
+    if (campaign.length) params.set("campaign", campaign.join(","));
     fetch(`/api/q169-data?${params.toString()}`)
       .then((r) => r.json())
       .then((d) => { setCols(d.cols ?? []); setRows(d.rows ?? []); setLoading(false); })
-      .catch((err) => { setError(err.message ?? "Failed to load"); setLoading(false); });
-  }, [campaign, dateStart, dateEnd, filterDistrict, filterState]);
+      .catch((err: Error) => { setError(err.message ?? "Failed to load"); setLoading(false); });
+  }, [campaign, dateStart, dateEnd, filterDistrict]);
 
-  const sorted = [...rows].sort((a, b) => {
+  const stateCol = cols.findIndex((c) => c.display_name === "State");
+
+  // Client-side state filter — Metabase aggregates one row per state so this
+  // is instant and also keeps the map in sync with the selected filter.
+  const filteredRows = filterState.length > 0 && stateCol >= 0
+    ? rows.filter((row) => filterState.some((s) => s.toLowerCase() === String(row[stateCol] ?? "").toLowerCase()))
+    : rows;
+
+  const sorted = [...filteredRows].sort((a, b) => {
     const av = a[sort.col]; const bv = b[sort.col];
     if (av === null || av === undefined) return 1;
     if (bv === null || bv === undefined) return -1;
@@ -63,11 +112,10 @@ function GeographyTable({
     return sort.dir === "asc" ? cmp : -cmp;
   });
 
-  const stateCol = cols.findIndex((c) => c.display_name === "State");
   const engagedUsersCol = cols.findIndex((c) => c.display_name === "Engaged Users");
   const valueByState: Record<string, number> = {};
   if (stateCol >= 0 && engagedUsersCol >= 0) {
-    for (const row of rows) {
+    for (const row of filteredRows) {
       const state = String(row[stateCol] ?? "");
       const value = Number(row[engagedUsersCol]) || 0;
       if (state) valueByState[state] = value;
@@ -77,7 +125,7 @@ function GeographyTable({
   const totals = cols.map((col, j) => {
     if (j === stateCol) return "Grand total";
     if (!NUMBER_TYPES.has(col.base_type)) return "";
-    return rows.reduce((sum, row) => sum + (Number(row[j]) || 0), 0);
+    return filteredRows.reduce((sum, row) => sum + (Number(row[j]) || 0), 0);
   });
 
   const displayName = (name: string) => (name === "Leads" ? "Unique Leads" : name);
@@ -86,9 +134,9 @@ function GeographyTable({
     <div>
       <div className="bg-gray-900 text-white px-5 py-3 rounded-t-xl flex items-center justify-between">
         <span className="font-bold text-sm tracking-wide uppercase">Engagements By Geography</span>
-        {rows.length > 0 && (
+        {filteredRows.length > 0 && (
           <button
-            onClick={() => exportToCsv("engagements-by-geography", cols, rows)}
+            onClick={() => exportToCsv("engagements-by-geography", cols, filteredRows)}
             className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white transition-colors"
           >
             <Download size={13} /> Export CSV
@@ -105,12 +153,16 @@ function GeographyTable({
       )}
       {!loading && !error && (
         <div className="border border-t-0 border-gray-200 rounded-b-xl overflow-hidden shadow-sm bg-white">
-          {rows.length === 0 ? (
+          {filteredRows.length === 0 ? (
             <div className="flex items-center justify-center h-48 text-gray-400 text-sm bg-white">No results</div>
           ) : (
             <div className="flex flex-col lg:flex-row gap-4 p-4">
-              <div className="lg:w-1/2 shrink-0 flex items-center">
-                <UsStateChoropleth valueByState={valueByState} />
+              <div className="lg:w-1/2 shrink-0 flex items-start">
+                <UsStateChoropleth
+                  valueByState={valueByState}
+                  selectedState={selectedState ?? undefined}
+                  onStateClick={(abbr) => setSelectedState((s) => s === abbr ? null : abbr)}
+                />
               </div>
               <div className="lg:w-1/2 min-w-0 overflow-auto">
                 <table className="text-sm border-collapse w-full">
@@ -138,20 +190,28 @@ function GeographyTable({
                     </tr>
                   </thead>
                   <tbody>
-                    {sorted.map((row, i) => (
-                      <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                        <td className="px-3 py-1.5 text-center text-gray-400 text-xs w-10 shrink-0">{i + 1}</td>
-                        {row.map((cell, j) => {
-                          const isNum = NUMBER_TYPES.has(cols[j]?.base_type);
-                          const isLeft = GEO_LEFT_ALIGN_COLS.has(cols[j]?.display_name ?? "");
-                          return (
-                            <td key={j} className={`px-4 py-1.5 ${isLeft ? "text-left" : "text-center"} ${isNum ? "tabular-nums" : ""} text-gray-800`}>
-                              {cell === null || cell === undefined ? "" : String(cell)}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
+                    {sorted.map((row, i) => {
+                      const rowState = stateCol >= 0 ? String(row[stateCol] ?? "") : "";
+                      const isActive = rowState && rowState === selectedState;
+                      return (
+                        <tr
+                          key={i}
+                          onClick={() => setSelectedState((s) => s === rowState ? null : rowState)}
+                          className={`border-b border-gray-100 cursor-pointer transition-colors ${isActive ? "bg-orange-50" : "hover:bg-gray-50"}`}
+                        >
+                          <td className={`px-3 py-1.5 text-center text-xs w-10 shrink-0 ${isActive ? "text-orange-500 font-bold" : "text-gray-400"}`}>{i + 1}</td>
+                          {row.map((cell, j) => {
+                            const isNum = NUMBER_TYPES.has(cols[j]?.base_type);
+                            const isLeft = GEO_LEFT_ALIGN_COLS.has(cols[j]?.display_name ?? "");
+                            return (
+                              <td key={j} className={`px-4 py-1.5 ${isLeft ? "text-left" : "text-center"} ${isNum ? "tabular-nums" : ""} ${isActive ? "text-orange-700 font-semibold" : "text-gray-800"}`}>
+                                {cell === null || cell === undefined ? "" : String(cell)}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-gray-300 font-bold">
@@ -179,13 +239,21 @@ function GeographyTable({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 function GeoInsightsContent() {
-  const { campaign, dateStart, dateEnd } = useFilter();
+  const { campaign, dateStart, dateEnd, resetSignal } = useFilter();
 
   const [filterDistrict, setFilterDistrict] = useState<string[]>([]);
   const [filterState, setFilterState] = useState<string[]>([]);
+  const [selectedState, setSelectedState] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (resetSignal === 0) return;
+    setFilterDistrict([]);
+    setFilterState([]);
+    setSelectedState(null);
+  }, [resetSignal]);
 
   return (
-    <div style={{ position: "fixed", top: 0, left: "16rem", right: 0, bottom: 0,
+    <div style={{ position: "fixed", top: 0, left: "12rem", right: 0, bottom: 0,
                   display: "flex", flexDirection: "column", background: "#f9fafb", zIndex: 1 }}>
       <div style={{ flexShrink: 0, padding: "16px 24px 0" }}>
         <DashboardHeader />
@@ -204,6 +272,8 @@ function GeoInsightsContent() {
           dateEnd={dateEnd}
           filterDistrict={filterDistrict}
           filterState={filterState}
+          selectedState={selectedState}
+          setSelectedState={setSelectedState}
         />
       </div>
     </div>

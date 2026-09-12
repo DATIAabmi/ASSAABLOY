@@ -36,14 +36,27 @@ function LoginForm() {
         return;
       }
 
-      // Start warming the primary data endpoints before navigating so the
-      // first tab appears instantly when the user lands on the dashboard.
+      // Warm the most important endpoints immediately, then stagger the rest
+      // so we don't fire 12 simultaneous Metabase queries on login.
       const c = encodeURIComponent(DEFAULT_CAMPAIGN);
-      [
+      const priority = [
         `/api/funnel-data?campaign=${c}`,
         `/api/q405-data?campaign=${c}`,
         `/api/q363-data?campaign=${c}`,
-      ].forEach((url) => fetch(url, { priority: "low" } as RequestInit).catch(() => {}));
+        `/api/q180-data`,
+      ];
+      const deferred = [
+        `/api/q425-data?campaign=${c}`,
+        `/api/leads-summary?campaign=${c}`,
+        `/api/q174-data?campaign=${c}`,
+        `/api/q181-data?campaign=${c}`,
+        `/api/content-data?campaign=${c}`,
+        `/api/q168-data?campaign=${c}`,
+        `/api/q169-data?campaign=${c}`,
+        `/api/ai-signals-data`,
+      ];
+      priority.forEach((url) => fetch(url).catch(() => {}));
+      setTimeout(() => deferred.forEach((url) => fetch(url).catch(() => {})), 2000);
 
       router.push(from);
       router.refresh();

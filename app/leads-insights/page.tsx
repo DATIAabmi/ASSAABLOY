@@ -8,7 +8,7 @@ import MetabaseProviderWrapper from "@/components/MetabaseProvider";
 import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 import LeadsSummaryPanel from "@/components/LeadsSummaryPanel";
 import { exportToCsv } from "@/lib/exportCsv";
-function fetchFieldOptions(field: "district" | "state" | "job_function") {
+function fetchFieldOptions(field: "district" | "state" | "job_function" | "content_name") {
   return (q: string) =>
     fetch(`/api/filter-search?field=${field}&q=${encodeURIComponent(q)}`)
       .then((r) => r.json())
@@ -24,6 +24,7 @@ const SORT_COLUMNS = [
   { label: "State",           index: 3 },
   { label: "Job Function",    index: 4 },
   { label: "Total Downloads", index: 5 },
+  { label: "Intel",            index: 6 },
 ];
 
 function SortDropdown({ sort, onSort }: { sort: SortState; onSort: (s: SortState) => void }) {
@@ -71,11 +72,11 @@ function SortDropdown({ sort, onSort }: { sort: SortState; onSort: (s: SortState
 type Col = { display_name: string; base_type: string };
 type Row = (string | number | null)[];
 const NUMBER_TYPES = new Set(["type/Integer","type/BigInteger","type/Float","type/Decimal","type/Number"]);
-const FORCE_CENTER_COLS = new Set(["Campaign", "State"]);
+const FORCE_CENTER_COLS = new Set(["Campaign", "State", "Intel"]);
 const HEADER_LABELS: Record<string, string> = { "District Domain": "Domain" };
-// Visual column order: District, Domain, State, Campaign, then the rest as-is.
-// Raw data order (card 174): 0=District 1=Domain 2=Campaign 3=State 4=Job Function 5=Total Downloads
-const COL_ORDER = [0, 1, 3, 2, 4, 5];
+// Visual column order: District, Domain, State, Campaign, SBM, Job Function, Total Downloads
+// Raw data order (card 174 + SBM join): 0=District 1=Domain 2=Campaign 3=State 4=Job Function 5=Total Downloads 6=SBM
+const COL_ORDER = [0, 1, 3, 2, 6, 4, 5];
 
 function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
   cols: Col[]; rows: Row[];
@@ -97,7 +98,7 @@ function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
 
   return (
     <div className="bg-white">
-      <table className="text-sm border-collapse min-w-full">
+      <table className="text-xs border-collapse" style={{ minWidth: 1100 }}>
         <thead>
           <tr className="border-b border-gray-200">
             <th className="sticky z-10 bg-white px-3 py-2 w-12 text-xs font-bold border-b border-gray-200" style={{ color: "#111827", textAlign: "center", top: headerTop }}>#</th>
@@ -150,6 +151,7 @@ function LeadsInsightsContent() {
   const [filterDistrict, setFilterDistrict] = useState<string[]>([]);
   const [filterState, setFilterState] = useState<string[]>([]);
   const [filterJobFunction, setFilterJobFunction] = useState<string[]>([]);
+  const [filterContentName, setFilterContentName] = useState<string[]>([]);
   const [cols, setCols] = useState<Col[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -178,13 +180,15 @@ function LeadsInsightsContent() {
     if (dateEnd)                  params.set("dateEnd",     dateEnd);
     if (filterDistrict.length)    params.set("district",    filterDistrict.join(","));
     if (filterState.length)       params.set("state",       filterState.join(","));
-    if (filterJobFunction.length) params.set("jobFunction", filterJobFunction.join(","));
+    filterJobFunction.forEach((v) => params.append("jobFunction", v));
+    filterContentName.forEach((v) => params.append("contentName", v));
 
     fetch(`/api/q174-data?${params.toString()}`)
       .then(async (r) => {
         const text = await r.text();
         if (!text.trim()) return { cols: [], rows: [] };
-        return JSON.parse(text);
+        try { return JSON.parse(text); }
+        catch { throw new Error("Server error — please try again or reduce the number of filters selected"); }
       })
       .then((d: { cols?: unknown[]; rows?: unknown[]; error?: string }) => {
         if (d.error) throw new Error(d.error);
@@ -193,7 +197,7 @@ function LeadsInsightsContent() {
         setLoading(false);
       })
       .catch((err: Error) => { setError(err.message ?? "Failed to load"); setLoading(false); });
-  }, [campaign, dateStart, dateEnd, filterDistrict, filterState, filterJobFunction]);
+  }, [campaign, dateStart, dateEnd, filterDistrict, filterState, filterJobFunction, filterContentName]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -202,10 +206,11 @@ function LeadsInsightsContent() {
     setFilterDistrict([]);
     setFilterState([]);
     setFilterJobFunction([]);
+    setFilterContentName([]);
   }, [resetSignal]);
 
   return (
-    <div style={{ position: "fixed", top: 0, left: "16rem", right: 0, bottom: 0,
+    <div style={{ position: "fixed", top: 0, left: "12rem", right: 0, bottom: 0,
                   display: "flex", flexDirection: "column", background: "#f9fafb", zIndex: 1 }}>
       <div style={{ flexShrink: 0, padding: "16px 24px 0" }}>
         <DashboardHeader />
@@ -216,13 +221,15 @@ function LeadsInsightsContent() {
             <MultiSelectDropdown label="District"     value={filterDistrict}    onChange={setFilterDistrict}    search={fetchFieldOptions("district")} />
             <MultiSelectDropdown label="Job Function" value={filterJobFunction} onChange={setFilterJobFunction} search={fetchFieldOptions("job_function")} />
             <MultiSelectDropdown label="State"        value={filterState}       onChange={setFilterState}       search={fetchFieldOptions("state")} />
+            <MultiSelectDropdown label="Content"      value={filterContentName} onChange={setFilterContentName} search={fetchFieldOptions("content_name")} />
           </div>
           <SortDropdown sort={sort} onSort={setSort} />
         </div>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "0 24px 24px" }}>
-        <LeadsSummaryPanel />
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", WebkitOverflowScrolling: "touch", padding: "0 24px 24px" }}>
+        <div style={{ minWidth: 1100, width: "100%" }}>
+        <LeadsSummaryPanel districts={filterDistrict} states={filterState} />
         <div ref={titleBarRef} className="sticky top-0 z-20 bg-gray-900 text-white px-5 py-3 rounded-t-xl flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="font-bold text-sm tracking-wide uppercase">Leads Insights</span>
@@ -231,7 +238,14 @@ function LeadsInsightsContent() {
             )}
           </div>
           {rows.length > 0 && (
-            <button onClick={() => exportToCsv("leads-insights", cols, rows)}
+            <button onClick={() => {
+                // Raw order: 0=District 1=Domain 2=Campaign 3=State 4=Job Function 5=Total Downloads 6=SBM
+                // Desired: District, Domain, State, Campaign, SBM, Job Function, Total Downloads
+                const ORDER = [0, 1, 3, 2, 6, 4, 5];
+                const exportCols = ORDER.map((i) => cols[i]).filter(Boolean);
+                const exportRows = rows.map((r) => ORDER.map((i) => r[i]));
+                exportToCsv("leads-insights", exportCols, exportRows);
+              }}
               className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white transition-colors">
               <Download size={13} /> Export CSV
             </button>
@@ -247,10 +261,11 @@ function LeadsInsightsContent() {
           <div className="flex items-center justify-center h-64 text-red-500 text-sm bg-white border border-t-0 border-gray-200 rounded-b-xl">{error}</div>
         )}
         {!loading && !error && (
-          <div className="border border-t-0 border-gray-200 rounded-b-xl shadow-sm" style={{ clipPath: "inset(0 round 0 0 0.75rem 0.75rem)" }}>
+          <div className="border border-t-0 border-gray-200 rounded-b-xl shadow-sm overflow-hidden">
             <DataTable cols={cols} rows={rows} sort={sort} onSort={setSort} headerTop={titleBarHeight} />
           </div>
         )}
+        </div>
       </div>
     </div>
   );

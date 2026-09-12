@@ -31,7 +31,8 @@ export async function GET() {
     }).catch((err) => { inflightPromise = null; throw err; });
   }
   try {
-    return cachedJson(await inflightPromise);
+    const result = await inflightPromise;
+    return result.rows.length > 0 ? cachedJson(result) : NextResponse.json(result);
   } catch {
     return NextResponse.json({ rows: [] }, { status: 500 });
   }

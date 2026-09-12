@@ -6,6 +6,7 @@ import DashboardHeader from "@/components/DashboardHeader";
 import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 import { exportToCsv } from "@/lib/exportCsv";
 import { fmtDate } from "@/lib/fmtDate";
+import { useFilter } from "@/components/FilterContext";
 
 type Signal = Record<string, unknown>;
 type SortDir = "asc" | "desc";
@@ -17,7 +18,7 @@ function extractDomain(url: string | null | undefined): string {
 }
 
 // Full column grid — table scrolls horizontally
-// # | District | Domain | State | Campaign | Keywords | Source Link | Date | Category | Source | Signal Analysis | Source Text | Strength
+// # | District | Domain | State | Campaign | Keywords | Source Link | Date | Category | Source | Signal Analysis | Strength | Source Text
 const COLS = [
   { key: "#",               width: 30,  sort: false, flex: false },
   { key: "District",        width: 120, sort: true,  flex: false },
@@ -30,8 +31,8 @@ const COLS = [
   { key: "Category",        width: 115, sort: true,  flex: false },
   { key: "Source",          width: 90,  sort: true,  flex: false },
   { key: "Signal Analysis", width: 220, sort: true,  flex: true  },
-  { key: "Source Text",     width: 260, sort: false, flex: true  },
   { key: "Strength",        width: 70,  sort: true,  flex: false },
+  { key: "Source Text",     width: 260, sort: false, flex: true  },
 ];
 
 const SORT_OPTIONS = COLS.filter((c) => c.sort);
@@ -101,6 +102,7 @@ function getRowValue(row: Signal, colKey: string): unknown {
 }
 
 export default function AIOpportunityFeed() {
+  const { resetSignal } = useFilter();
   const [rows, setRows]       = useState<Signal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
@@ -108,6 +110,15 @@ export default function AIOpportunityFeed() {
   const [filterCategory, setFilterCategory] = useState<string[]>([]);
   const [filterSource,   setFilterSource]   = useState<string[]>([]);
   const [searchText,     setSearchText]     = useState("");
+
+  // Clear local filters when the global Reset Filters button is pressed
+  useEffect(() => {
+    if (resetSignal === 0) return;
+    setFilterCategory([]);
+    setFilterSource([]);
+    setSearchText("");
+    setSort({ col: "Date", dir: "desc" });
+  }, [resetSignal]);
 
   const titleBarRef = useRef<HTMLDivElement>(null);
   const [titleBarHeight, setTitleBarHeight] = useState(0);
@@ -164,12 +175,12 @@ export default function AIOpportunityFeed() {
 
   const csvCols = [
     "Organization", "Domain", "State", "Campaign #", "Keywords",
-    "Source Link", "Date", "Category", "Source", "Signal Analysis", "Source Text", "Strength",
+    "Source Link", "Date", "Category", "Source", "Signal Analysis", "Strength", "Source Text",
   ].map((k) => ({ display_name: k, base_type: "type/Text" }));
   const csvRows = sorted.map((r) => csvCols.map((c) => r[c.display_name]));
 
   return (
-    <div style={{ position: "fixed", top: 0, left: "16rem", right: 0, bottom: 0,
+    <div style={{ position: "fixed", top: 0, left: "12rem", right: 0, bottom: 0,
                   display: "flex", flexDirection: "column", background: "#f9fafb", zIndex: 1 }}>
       {/* Filters */}
       <div style={{ flexShrink: 0, padding: "16px 24px 0" }}>
@@ -260,8 +271,8 @@ export default function AIOpportunityFeed() {
                       {/* # */}
                       <div className="text-xs text-gray-400 tabular-nums pt-0.5">{i + 1}</div>
 
-                      {/* District (Organization in DB) */}
-                      <div className="text-xs text-gray-700 leading-snug pt-0.5 truncate">
+                      {/* District (Organization in DB) — wraps instead of truncating */}
+                      <div className="text-xs text-gray-700 leading-snug pt-0.5 break-words">
                         {(row["Organization"] as string) || "—"}
                       </div>
 
@@ -270,13 +281,13 @@ export default function AIOpportunityFeed() {
                         {domain || "—"}
                       </div>
 
-                      {/* State */}
-                      <div className="text-xs text-gray-600 pt-0.5">
+                      {/* State — centered */}
+                      <div className="text-xs text-gray-600 pt-0.5 text-center">
                         {(row["State"] as string) || "—"}
                       </div>
 
-                      {/* Campaign */}
-                      <div className="text-xs text-gray-600 pt-0.5">
+                      {/* Campaign — centered */}
+                      <div className="text-xs text-gray-600 pt-0.5 text-center">
                         {(row["Campaign #"] as string) || "—"}
                       </div>
 
@@ -317,14 +328,14 @@ export default function AIOpportunityFeed() {
                         {(row["Signal Analysis"] as string) || "—"}
                       </div>
 
-                      {/* Source Text */}
-                      <div className="text-xs text-gray-500 pt-0.5 break-words leading-snug">
-                        {(row["Source Text"] as string) || "—"}
+                      {/* Strength — centered, between Signal Analysis and Source Text */}
+                      <div className="text-xs text-gray-600 tabular-nums pt-0.5 text-center">
+                        {row["Strength"] !== null && row["Strength"] !== undefined && row["Strength"] !== "" ? String(row["Strength"]) : "—"}
                       </div>
 
-                      {/* Strength */}
-                      <div className="text-xs text-gray-600 tabular-nums pt-0.5">
-                        {row["Strength"] !== null && row["Strength"] !== undefined && row["Strength"] !== "" ? String(row["Strength"]) : "—"}
+                      {/* Source Text — same color as Signal Analysis */}
+                      <div className="text-xs text-gray-800 pt-0.5 break-words leading-snug">
+                        {(row["Source Text"] as string) || "—"}
                       </div>
                     </div>
                   );

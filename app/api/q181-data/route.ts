@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cachedJson } from "@/lib/apiCache";
+import { fmtDate } from "@/lib/fmtDate";
 
 export const maxDuration = 60;
 
 const METABASE_URL = process.env.NEXT_PUBLIC_METABASE_URL!;
 const API_KEY = process.env.METABASE_ADMIN_API_KEY!;
 const CAMPAIGN_COL = 2;
+const DATE_COL_INDEX = 6;
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 const DISPLAY_NAMES: Record<string, string> = {
   ST:          "State",
   Topic_Score: "Topic Score",
+  Date:        "Date",
 };
 
 function parseList(v: string | null): string[] {
@@ -42,7 +45,11 @@ async function fetchDataset(dateStart: string, dateEnd: string): Promise<Dataset
     base_type: c.base_type,
   }));
   const rows: unknown[][] = (data.data?.rows ?? []).map((row: unknown[]) =>
-    row.map((val, j) => j === CAMPAIGN_COL && typeof val === "string" ? val.split(":")[0].trim() : val)
+    row.map((val, j) => {
+      if (j === CAMPAIGN_COL && typeof val === "string") return val.split(":")[0].trim();
+      if (j === DATE_COL_INDEX) return fmtDate(val);
+      return val;
+    })
   );
   return { cols, rows };
 }

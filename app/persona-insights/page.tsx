@@ -7,6 +7,7 @@ import DashboardHeader from "@/components/DashboardHeader";
 import { useFilter } from "@/components/FilterContext";
 import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 import { exportToCsv } from "@/lib/exportCsv";
+import { normalizeJobTitle } from "@/lib/jobFunctionCategories";
 function fetchFieldOptions(field: "district" | "state" | "job_function") {
   return (q: string) =>
     fetch(`/api/filter-search?field=${field}&q=${encodeURIComponent(q)}`)
@@ -41,7 +42,7 @@ function DefinitionsModal({ onClose }: { onClose: () => void }) {
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "#111" }}>Definitions</span>
+          <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "#111" }}>Metric Descriptions</span>
           <button type="button" onClick={onClose} style={{ color: "#9ca3af", cursor: "pointer", background: "none", border: "none", padding: 0 }}>
             <X size={16} />
           </button>
@@ -127,12 +128,12 @@ function SortDropdown({ sort, onSort }: { sort: SortState; onSort: (s: SortState
 type Col = { display_name: string; base_type: string };
 type Row = (string | number | null)[];
 const NUMBER_TYPES = new Set(["type/Integer","type/BigInteger","type/Float","type/Decimal","type/Number"]);
-const LEFT_ALIGN_COLS = new Set(["District", "District Domain", "Job Function"]);
-const HEADER_LABELS: Record<string, string> = { "District Domain": "Domain" };
-// Visual column order: District, Domain, State, Campaign, then the rest as-is.
-// Raw data order (card 168): 0=District 1=Domain 2=State 3=Job Function
-// 4=Campaign 5=Engagements 6=Leads
-const COL_ORDER = [0, 1, 2, 4, 3, 5, 6];
+// Raw column indices (card 168): 0=District 1=Domain 2=State 3=Job Function 4=Campaign 5=Engagements 6=Leads
+// Visual column order shown to user
+const COL_ORDER = [0, 1, 2, 4, 3, 6, 5];
+// Columns that are always left-aligned, identified by raw card index (avoids display_name mismatch)
+const LEFT_ALIGN_INDICES = new Set([0, 1, 3]); // District, Domain, Job Function
+const COL_LABELS: Record<number, string> = { 1: "Domain", 3: "Job Function" };
 
 function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
   cols: Col[]; rows: Row[];
@@ -154,23 +155,34 @@ function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
 
   return (
     <div className="bg-white">
-      <table className="text-sm border-collapse w-full">
+      <table className="text-xs border-collapse table-fixed" style={{ width: 1050, minWidth: 1050 }}>
+        <colgroup>
+          <col style={{ width: 36 }} />   {/* # */}
+          <col style={{ width: 160 }} />  {/* District */}
+          <col style={{ width: 120 }} />  {/* Domain */}
+          <col style={{ width: 50 }} />   {/* State */}
+          <col style={{ width: 80 }} />   {/* Campaign */}
+          <col style={{ width: 170 }} />  {/* Job Function */}
+          <col style={{ width: 72 }} />   {/* Leads */}
+          <col style={{ width: 88 }} />   {/* Engagements */}
+        </colgroup>
         <thead>
           <tr className="border-b border-gray-200">
-            <th className="sticky z-10 bg-white px-3 py-2 text-center w-10 font-semibold whitespace-nowrap border-b border-gray-200" style={{ color: "#111827", top: headerTop }}>#</th>
+            <th className="sticky z-10 bg-white px-2 py-2 text-center w-10 font-bold whitespace-nowrap border-b border-gray-200" style={{ color: "#111827", top: headerTop }}>#</th>
             {COL_ORDER.map((j) => {
               const col = cols[j];
               if (!col) return null;
-              const isLeft = LEFT_ALIGN_COLS.has(col.display_name);
+              const isLeft = LEFT_ALIGN_INDICES.has(j);
               const active = sort.col === j;
+              const label = COL_LABELS[j] ?? col.display_name;
               return (
                 <th key={j}
                   onClick={() => onSort({ col: j, dir: active && sort.dir === "desc" ? "asc" : "desc" })}
-                  className="sticky z-10 bg-white px-4 py-3 font-semibold whitespace-nowrap cursor-pointer select-none hover:opacity-70 border-b border-gray-200"
-                  style={{ color: "#111827", top: headerTop, textAlign: isLeft ? "left" : "center" }}
+                  className={`sticky z-10 bg-white px-4 py-2 font-bold whitespace-nowrap cursor-pointer select-none hover:opacity-70 leading-tight border-b border-gray-200 ${isLeft ? "text-left" : "text-center"}`}
+                  style={{ color: "#111827", top: headerTop }}
                 >
                   <span className={`inline-flex items-center gap-1 ${isLeft ? "justify-start" : "justify-center"}`}>
-                    {HEADER_LABELS[col.display_name] ?? col.display_name}
+                    {label}
                     {active
                       ? sort.dir === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />
                       : <ArrowUpDown size={11} className="opacity-30" />}
@@ -187,9 +199,9 @@ function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
               {COL_ORDER.map((j) => {
                 const cell = row[j];
                 const isNum = NUMBER_TYPES.has(cols[j]?.base_type);
-                const isLeft = LEFT_ALIGN_COLS.has(cols[j]?.display_name ?? "");
+                const isLeft = LEFT_ALIGN_INDICES.has(j);
                 return (
-                  <td key={j} style={{ textAlign: isLeft ? "left" : "center" }} className={`px-4 py-1.5 ${isNum ? "tabular-nums whitespace-nowrap" : ""} text-gray-800`}>
+                  <td key={j} className={`px-4 py-1.5 ${isLeft ? "text-left" : "text-center"} ${isNum ? "tabular-nums whitespace-nowrap" : ""} text-gray-800`}>
                     {cell === null || cell === undefined ? "" : String(cell)}
                   </td>
                 );
@@ -233,15 +245,16 @@ function PersonaInsightsContent() {
     return () => ro.disconnect();
   }, []);
 
+  // Only date and state are server-side filters; district and job function are
+  // client-side so allRows stays stable and the district dropdown always shows
+  // the full set of available districts regardless of current selection.
   const fetchData = useCallback(() => {
     setLoading(true);
     setError("");
     const params = new URLSearchParams();
-    if (dateStart)              params.set("dateStart",   dateStart);
-    if (dateEnd)                params.set("dateEnd",     dateEnd);
-    if (filterDistrict.length)    params.set("district",    filterDistrict.join(","));
-    if (filterState.length)       params.set("state",       filterState.join(","));
-    if (filterJobFunction.length) params.set("jobFunction", filterJobFunction.join(","));
+    if (dateStart)          params.set("dateStart", dateStart);
+    if (dateEnd)            params.set("dateEnd",   dateEnd);
+    if (filterState.length) params.set("state",     filterState.join(","));
 
     fetch(`/api/q168-data?${params.toString()}`)
       .then((r) => r.json())
@@ -252,14 +265,23 @@ function PersonaInsightsContent() {
         setLoading(false);
       })
       .catch((err) => { setError(err.message ?? "Failed to load"); setLoading(false); });
-  }, [dateStart, dateEnd, filterDistrict, filterState, filterJobFunction]);
+  }, [dateStart, dateEnd, filterState]);
 
-  // Card 168 has no template tags — filter campaign client-side.
-  // Campaign column is at index 4 and stores short codes ("C6").
+  // Client-side filters: campaign (index 4), district (index 0), job function (index 3).
   useEffect(() => {
     const prefixes = campaign.map((c) => c.split(":")[0].trim());
-    setRows(prefixes.length === 0 ? allRows : allRows.filter((row) => prefixes.includes(String(row[4] ?? ""))));
-  }, [campaign, allRows]);
+    let filtered = allRows;
+    if (prefixes.length > 0) {
+      filtered = filtered.filter((row) => prefixes.includes(String(row[4] ?? "")));
+    }
+    if (filterDistrict.length > 0) {
+      filtered = filtered.filter((row) => filterDistrict.includes(String(row[0] ?? "")));
+    }
+    if (filterJobFunction.length > 0) {
+      filtered = filtered.filter((row) => filterJobFunction.includes(normalizeJobTitle(String(row[3] ?? ""))));
+    }
+    setRows(filtered);
+  }, [campaign, allRows, filterDistrict, filterJobFunction]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -270,8 +292,12 @@ function PersonaInsightsContent() {
     setFilterJobFunction([]);
   }, [resetSignal]);
 
+  // Derive district options from loaded data so the dropdown only shows
+  // districts that actually appear in the persona insights results.
+  const districtOptions = [...new Set(allRows.map((r) => String(r[0] ?? "")).filter(Boolean))].sort();
+
   return (
-    <div style={{ position: "fixed", top: 0, left: "16rem", right: 0, bottom: 0,
+    <div style={{ position: "fixed", top: 0, left: "12rem", right: 0, bottom: 0,
                   display: "flex", flexDirection: "column", background: "#f9fafb", zIndex: 1 }}>
       <div style={{ flexShrink: 0, padding: "16px 24px 0" }}>
         <DashboardHeader />
@@ -279,7 +305,7 @@ function PersonaInsightsContent() {
         {/* Filter + sort row */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <MultiSelectDropdown label="District"     value={filterDistrict}    onChange={setFilterDistrict}    search={fetchFieldOptions("district")} />
+            <MultiSelectDropdown label="District"     value={filterDistrict}    onChange={setFilterDistrict}    options={districtOptions} />
             <MultiSelectDropdown label="Job Function" value={filterJobFunction} onChange={setFilterJobFunction} search={fetchFieldOptions("job_function")} />
             <MultiSelectDropdown label="State"        value={filterState}       onChange={setFilterState}       search={fetchFieldOptions("state")} />
             <button
@@ -288,7 +314,7 @@ function PersonaInsightsContent() {
               className="flex items-center gap-1.5 px-3 py-2 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 rounded-lg bg-white transition-colors shrink-0"
             >
               <Info size={13} />
-              Definitions
+              Metric Descriptions
             </button>
           </div>
           <SortDropdown sort={sort} onSort={setSort} />
@@ -297,13 +323,26 @@ function PersonaInsightsContent() {
         {showDefs && <DefinitionsModal onClose={() => setShowDefs(false)} />}
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "0 24px 24px" }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", WebkitOverflowScrolling: "touch", padding: "0 24px 24px" }}>
+        <div style={{ minWidth: 1050, width: "100%" }}>
         {/* Section title */}
         <div ref={titleBarRef} className="sticky top-0 z-20 bg-gray-900 text-white px-5 py-3 rounded-t-xl flex items-center justify-between">
-          <span className="font-bold text-sm tracking-wide uppercase">Engagements By Persona Insights</span>
+          <div className="flex items-center gap-3">
+            <span className="font-bold text-sm tracking-wide uppercase">Engagements By Persona Insights</span>
+            {!loading && rows.length > 0 && (
+              <span className="text-gray-400 text-xs">{rows.length.toLocaleString()} records</span>
+            )}
+          </div>
           {rows.length > 0 && (
             <button
-              onClick={() => exportToCsv("persona-insights", cols, rows)}
+              onClick={() => {
+                // Desired export order: District, Domain, State, Campaign, Job Function, Engagements, Leads
+                // API returns: 0=District 1=Domain 2=State 3=Job Function 4=Campaign 5=Engagements 6=Leads
+                const ORDER = [0, 1, 2, 4, 3, 5, 6];
+                const exportCols = ORDER.map((i) => cols[i]).filter(Boolean);
+                const exportRows = rows.map((r) => ORDER.map((i) => r[i]));
+                exportToCsv("persona-insights", exportCols, exportRows);
+              }}
               className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white transition-colors"
             >
               <Download size={13} /> Export CSV
@@ -320,10 +359,11 @@ function PersonaInsightsContent() {
           <div className="flex items-center justify-center h-64 text-red-500 text-sm bg-white border border-t-0 border-gray-200 rounded-b-xl">{error}</div>
         )}
         {!loading && !error && (
-          <div className="border border-t-0 border-gray-200 rounded-b-xl shadow-sm" style={{ clipPath: "inset(0 round 0 0 0.75rem 0.75rem)" }}>
+          <div className="border border-t-0 border-gray-200 rounded-b-xl shadow-sm overflow-hidden">
             <DataTable cols={cols} rows={rows} sort={sort} onSort={setSort} headerTop={titleBarHeight} />
           </div>
         )}
+        </div>
       </div>
     </div>
   );

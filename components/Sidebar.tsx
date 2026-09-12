@@ -21,14 +21,17 @@ import {
 const navItems = [
   { label: "Ecosystem Insights", icon: Globe, href: "/" },
   { label: "Engaged Users by District", icon: Users, href: "/engaged-users" },
-  { label: "School Board Minutes", icon: ScrollText, href: "/school-board-minutes" },
+  { label: "Account Intelligence", icon: Sparkles, href: "/ai-opportunity-feed" },
   { label: "Persona Insights", icon: UserCircle, href: "/persona-insights" },
   { label: "Geo Insights", icon: MapPin, href: "/geo-insights" },
   { label: "Leads Insights", icon: TrendingUp, href: "/leads-insights" },
   { label: "Topic Insights", icon: BookOpen, href: "/topic-insights" },
   { label: "Content Insights", icon: FileText, href: "/content-insights" },
   { label: "Ad Samples", icon: MonitorPlay, href: "/ad-samples" },
-  { label: "Account Intelligence", icon: Sparkles, href: "/ai-opportunity-feed" },
+  // RAS has since hidden School Board Minutes from its nav ("re-enable when
+  // ready") but we just wired this tab up with real ASSA ABLOY data, so
+  // keeping it visible here rather than silently dropping a working feature.
+  { label: "School Board Minutes", icon: ScrollText, href: "/school-board-minutes" },
 ];
 
 export default function Sidebar() {
@@ -44,9 +47,9 @@ export default function Sidebar() {
   }, []);
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-100 flex flex-col z-10">
+    <aside className="fixed left-0 top-0 h-screen w-48 bg-white border-r border-gray-100 flex flex-col z-10">
       {/* Branding */}
-      <div className="px-5 py-4 border-b border-gray-100">
+      <div className="px-4 py-4 border-b border-gray-100">
         {lastUpdated && (
           <p className="text-[10px] text-blue-500 font-medium mb-3">
             Last Updated: {lastUpdated}
@@ -55,7 +58,7 @@ export default function Sidebar() {
         <Image
           src="/datia-k12-logo.png"
           alt="DATIA K12"
-          width={180}
+          width={140}
           height={40}
           priority
         />

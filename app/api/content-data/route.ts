@@ -39,31 +39,71 @@ function avgPct(values: (string | number | null | undefined)[]): string | null {
   return `${avg.toFixed(2)}%`;
 }
 
-// Merge [label, count, ...rest][] across campaigns by summing the count column (index 1).
-function mergeByLabel(rowSets: unknown[][][]): unknown[][] {
+// Merge Card 552 rows [Channel, Impressions, Clicks, CTR] across campaigns.
+// Sums Impressions and Clicks per channel, recomputes CTR from totals.
+function mergeChannelBreakdown(rowSets: unknown[][][]): unknown[][] {
+  const byChannel = new Map<string, { impressions: number; clicks: number; hasImp: boolean }>();
+  for (const rows of rowSets) {
+    for (const row of rows) {
+      const channel = String(row[0]);
+      const imp = row[1] != null ? Number(row[1]) : null;
+      const clk = row[2] != null ? Number(row[2]) : 0;
+      if (!byChannel.has(channel)) byChannel.set(channel, { impressions: 0, clicks: 0, hasImp: false });
+      const t = byChannel.get(channel)!;
+      if (imp != null && !isNaN(imp)) { t.impressions += imp; t.hasImp = true; }
+      if (!isNaN(clk as number)) t.clicks += (clk as number);
+    }
+  }
+  return [...byChannel.entries()]
+    .map(([ch, { impressions, clicks, hasImp }]) => {
+      const imp = hasImp ? impressions : null;
+      const ctr = hasImp && impressions > 0 ? (clicks / impressions) * 100 : null;
+      return [ch, imp, clicks, ctr];
+    })
+    .sort((a, b) => (Number(b[1]) || 0) - (Number(a[1]) || 0));
+}
+
+// Merge Card 553 rows [channel, Clicks, Click_Percentage] across campaigns.
+// Sums clicks per channel, recomputes percentages from the new total.
+function mergeChannelClicks(rowSets: unknown[][][]): unknown[][] {
   const totals = new Map<string, number>();
   for (const rows of rowSets) {
     for (const row of rows) {
-      const label = String(row[0]);
-      const count = Number(row[1]) || 0;
-      totals.set(label, (totals.get(label) ?? 0) + count);
+      const channel = String(row[0]);
+      const clicks = Number(row[1]) || 0;
+      totals.set(channel, (totals.get(channel) ?? 0) + clicks);
     }
   }
-  return [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  const total = [...totals.values()].reduce((a, b) => a + b, 0);
+  return [...totals.entries()]
+    .map(([ch, clicks]) => [ch, clicks, total > 0 ? clicks / total : 0])
+    .sort((a, b) => (b[1] as number) - (a[1] as number));
+}
+
+// Per-card template tag UUIDs — Metabase matches by id, not by tag name.
+const TAG_IDS = {
+  549: { Abmi_Campaign: "42673811-578c-499b-a7fb-67482c6015bb", Date: "dbe6f1b5-2fb5-475e-b7ed-03877fa37163" },
+  550: { Abmi_Campaign: "af6ff2ef-7c3d-4d58-9367-2d4e0a36c816", Date: "89865cc2-c75d-43ed-9d9b-3a55e264f3bb" },
+  551: { Abmi_Campaign: "0440695a-a7db-4478-ba49-b4b6de7bf3d5", Date: "70cf5f50-a5c2-4405-b3d2-df5b0ce98a7d" },
+  552: { Abmi_Campaign: "845b765b-7f12-4d62-8834-12918445eaa8", Date: "ad1166e3-6a2c-424e-aa1e-3b6445a3349e" },
+  553: { Abmi_Campaign: "aab79af5-1a19-4e31-90d7-ce19a6f8ebb9", Date: "2d93be9f-78e7-498a-8ccf-90e63accec6f" },
+} as const;
+
+function buildParams(cardId: keyof typeof TAG_IDS, campaign: string, dateStart: string, dateEnd: string): object[] {
+  const ids = TAG_IDS[cardId];
+  const params: object[] = [];
+  if (campaign)            params.push({ id: ids.Abmi_Campaign, type: "string/=",  value: campaign,                    target: ["variable",  ["template-tag", "Abmi_Campaign"]] });
+  if (dateStart && dateEnd) params.push({ id: ids.Date,          type: "date/range", value: `${dateStart}~${dateEnd}`, target: ["dimension", ["template-tag", "Date"]] });
+  return params;
 }
 
 async function fetchContentForCampaign(campaign: string, dateStart: string, dateEnd: string) {
-  const params: object[] = [];
-  if (campaign)  params.push({ id: "campaign",   type: "string/=",   value: campaign,  target: ["variable", ["template-tag", "Abmi_Campaign"]] });
-  if (dateStart) params.push({ id: "date_start", type: "date/range",  value: dateStart, target: ["variable", ["template-tag", "Date"]] });
-  if (dateEnd)   params.push({ id: "date_end",   type: "date/range",  value: dateEnd,   target: ["variable", ["template-tag", "Date"]] });
-
   const [rows200, rows201, rows202, rows203, rows204] = await Promise.all([
-    fetchCard(549, params),
-    fetchCard(550, params),
-    fetchCard(551, params),
-    fetchCard(552, params),
-    fetchCard(553, params),
+    fetchCard(549, buildParams(549, campaign, dateStart, dateEnd)),
+    fetchCard(550, buildParams(550, campaign, dateStart, dateEnd)),
+    fetchCard(551, buildParams(551, campaign, dateStart, dateEnd)),
+    fetchCard(552, buildParams(552, campaign, dateStart, dateEnd)),
+    fetchCard(553, buildParams(553, campaign, dateStart, dateEnd)),
   ]);
 
   return {
@@ -91,7 +131,7 @@ export async function GET(req: NextRequest) {
     impressions:      sum(perCampaign.map((r) => r.impressions)),
     clicks:           sum(perCampaign.map((r) => r.clicks)),
     ctr:              avgPct(perCampaign.map((r) => r.ctr)),
-    channelBreakdown: mergeByLabel(perCampaign.map((r) => r.channelBreakdown)),
-    channelClicks:    mergeByLabel(perCampaign.map((r) => r.channelClicks)),
+    channelBreakdown: mergeChannelBreakdown(perCampaign.map((r) => r.channelBreakdown)),
+    channelClicks:    mergeChannelClicks(perCampaign.map((r) => r.channelClicks)),
   });
 }

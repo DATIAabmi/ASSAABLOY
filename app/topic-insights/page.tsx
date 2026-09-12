@@ -31,9 +31,19 @@ const TOPICS = [
   "Third-Party Vendors",
 ];
 
-// ─── AVG Topic Score chart ────────────────────────────────────────────────────
+// ─── Data types (used by table and chart) ─────────────────────────────────────
 
-type TopicRow = [string, number];
+type Col = { display_name: string; base_type: string };
+type Row = (string | number | null)[];
+const NUMBER_TYPES = new Set(["type/Integer","type/BigInteger","type/Float","type/Decimal","type/Number"]);
+const LEFT_ALIGN_COLS = new Set(["District", "Domain", "District Domain", "Topic"]);
+const FORCE_CENTER_COLS = new Set(["Campaign", "State"]);
+const HEADER_LABELS: Record<string, string> = { "District Domain": "Domain" };
+// Visual column order: District, Domain, State, Campaign, Date, Topic, Topic Score.
+// Raw data order (card 181): 0=District 1=Domain 2=Campaign 3=State 4=Topic 5=Topic Score 6=Date
+const COL_ORDER = [0, 1, 3, 2, 6, 4, 5];
+
+// ─── AVG Topic Score chart ────────────────────────────────────────────────────
 
 function scoreColor(score: number): string {
   if (score >= 66) return "#88BF4D";
@@ -41,18 +51,25 @@ function scoreColor(score: number): string {
   return "#EF8C8C";
 }
 
-function AvgTopicScoreChart() {
-  const [rows, setRows] = useState<TopicRow[]>([]);
-  const [loading, setLoading] = useState(true);
+// Computes avg topic score per topic from the filtered rows already in state —
+// so the chart automatically reflects every filter change with no extra fetch.
+function AvgTopicScoreChart({ rows, topicCol, scoreCol, loading }: {
+  rows: Row[]; topicCol: number; scoreCol: number; loading: boolean;
+}) {
+  const byTopic: Record<string, { sum: number; count: number }> = {};
+  for (const row of rows) {
+    const topic = String(row[topicCol] ?? "");
+    const score = Number(row[scoreCol]);
+    if (!topic || isNaN(score)) continue;
+    if (!byTopic[topic]) byTopic[topic] = { sum: 0, count: 0 };
+    byTopic[topic].sum += score;
+    byTopic[topic].count += 1;
+  }
 
-  useEffect(() => {
-    fetch("/api/q180-data")
-      .then((r) => r.json())
-      .then((d) => { setRows(d.rows ?? []); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, []);
+  const sorted = Object.entries(byTopic)
+    .map(([topic, { sum, count }]) => [topic, sum / count] as [string, number])
+    .sort((a, b) => b[1] - a[1]);
 
-  const sorted = [...rows].sort((a, b) => b[1] - a[1]);
   const max = sorted.length > 0 ? Math.max(...sorted.map((r) => r[1])) : 100;
 
   if (loading) {
@@ -60,6 +77,12 @@ function AvgTopicScoreChart() {
       <div className="flex items-center justify-center h-full gap-2 text-gray-400 text-sm">
         <Loader2 size={18} className="animate-spin" /> Loading…
       </div>
+    );
+  }
+
+  if (sorted.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full text-gray-400 text-sm">No data</div>
     );
   }
 
@@ -112,7 +135,7 @@ function DefinitionsModal({ onClose }: { onClose: () => void }) {
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "#111" }}>Definitions</span>
+          <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "#111" }}>Metric Descriptions</span>
           <button type="button" onClick={onClose} style={{ color: "#9ca3af", cursor: "pointer", background: "none", border: "none", padding: 0 }}>
             <X size={16} />
           </button>
@@ -187,16 +210,6 @@ function SortDropdown({ sort, onSort }: { sort: SortState; onSort: (s: SortState
 
 // ─── Data table ───────────────────────────────────────────────────────────────
 
-type Col = { display_name: string; base_type: string };
-type Row = (string | number | null)[];
-const NUMBER_TYPES = new Set(["type/Integer","type/BigInteger","type/Float","type/Decimal","type/Number"]);
-const LEFT_ALIGN_COLS = new Set(["District", "Domain", "District Domain", "Topic"]);
-const FORCE_CENTER_COLS = new Set(["Campaign", "State"]);
-const HEADER_LABELS: Record<string, string> = { "District Domain": "Domain" };
-// Visual column order: District, Domain, State, Campaign, then the rest as-is.
-// Raw data order (card 181): 0=District 1=Domain 2=Campaign 3=State 4=Topic 5=Topic Score
-const COL_ORDER = [0, 1, 3, 2, 4, 5];
-
 function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
   cols: Col[]; rows: Row[];
   sort: SortState; onSort: (s: SortState) => void;
@@ -215,12 +228,18 @@ function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
     return sort.dir === "asc" ? cmp : -cmp;
   });
 
+  // col order: #, District, Domain, State, Campaign, Date, Topic, Topic Score
+  const COL_WIDTHS = ["2%", "20%", "13%", "5%", "11%", "8%", "29%", "12%"];
+
   return (
     <div className="bg-white">
-      <table className="text-sm border-collapse min-w-full">
+      <table className="text-xs border-collapse" style={{ tableLayout: "fixed", width: 950, minWidth: 950 }}>
+        <colgroup>
+          {COL_WIDTHS.map((w, i) => <col key={i} style={{ width: w }} />)}
+        </colgroup>
         <thead>
           <tr className="border-b border-gray-200">
-            <th className="sticky z-10 bg-white px-3 py-2 text-center w-10 shrink-0 font-semibold border-b border-gray-200" style={{ color: "#111827", top: headerTop }}>#</th>
+            <th className="sticky z-10 bg-white px-2 py-2 text-center font-bold border-b border-gray-200" style={{ color: "#111827", top: headerTop }}>#</th>
             {COL_ORDER.map((j) => {
               const col = cols[j];
               if (!col) return null;
@@ -230,7 +249,7 @@ function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
                 <th key={j}
                   onClick={() => onSort({ col: j, dir: active && sort.dir === "desc" ? "asc" : "desc" })}
                   style={{ color: "#111827", textAlign: isLeft ? "left" : "center", top: headerTop }}
-                  className="sticky z-10 bg-white px-4 py-3 font-semibold whitespace-nowrap cursor-pointer select-none hover:opacity-70 border-b border-gray-200">
+                  className="sticky z-10 bg-white px-2 py-2 font-bold leading-tight cursor-pointer select-none hover:opacity-70 border-b border-gray-200">
                   <span className={`inline-flex items-center gap-1 ${isLeft ? "justify-start" : "justify-center"}`}>
                     {HEADER_LABELS[col.display_name] ?? col.display_name}
                     {active ? (sort.dir === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />) : <ArrowUpDown size={11} className="opacity-30" />}
@@ -243,17 +262,18 @@ function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
         <tbody>
           {sorted.map((row, i) => (
             <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-              <td className="px-3 py-1.5 text-center text-gray-400 text-xs">{i + 1}</td>
+              <td className="px-2 py-1.5 text-center text-gray-400">{i + 1}</td>
               {COL_ORDER.map((j) => {
                 const cell = row[j];
                 const isNum = NUMBER_TYPES.has(cols[j]?.base_type);
                 const colName = cols[j]?.display_name ?? "";
                 const isLeft = LEFT_ALIGN_COLS.has(colName) && !FORCE_CENTER_COLS.has(colName);
+                const text = cell === null || cell === undefined ? "" : String(cell);
                 return (
                   <td key={j}
                     style={{ textAlign: isLeft ? "left" : "center" }}
-                    className={`px-4 py-1.5 whitespace-nowrap ${isNum ? "tabular-nums" : ""} text-gray-800`}>
-                    {cell === null || cell === undefined ? "" : String(cell)}
+                    className={`px-2 py-1.5 ${isNum ? "tabular-nums" : ""} text-gray-800`}>
+                    <div className="truncate" title={text}>{text}</div>
                   </td>
                 );
               })}
@@ -267,7 +287,7 @@ function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
 
 // ─── Skeleton loader ──────────────────────────────────────────────────────────
 
-const TOPIC_SKELETON_COLS = [28, 110, 90, 36, 48, 130, 72];
+const TOPIC_SKELETON_COLS = [28, 110, 90, 36, 70, 60, 130, 72];
 const TOPIC_LOADING_MSGS = [
   "Fetching Bombora intent signals…",
   "Calculating topic scores…",
@@ -369,7 +389,7 @@ function TopicInsightsContent() {
   }, [resetSignal]);
 
   return (
-    <div style={{ position: "fixed", top: 0, left: "16rem", right: 0, bottom: 0,
+    <div style={{ position: "fixed", top: 0, left: "12rem", right: 0, bottom: 0,
                   display: "flex", flexDirection: "column", background: "#f9fafb", zIndex: 1 }}>
       <div style={{ flexShrink: 0, padding: "16px 24px 0" }}>
         <DashboardHeader />
@@ -386,7 +406,7 @@ function TopicInsightsContent() {
               className="flex items-center gap-1.5 px-3 py-2 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 rounded-lg bg-white transition-colors shrink-0"
             >
               <Info size={13} />
-              Definitions
+              Metric Descriptions
             </button>
           </div>
           <SortDropdown sort={sort} onSort={setSort} />
@@ -395,11 +415,17 @@ function TopicInsightsContent() {
         {showDefs && <DefinitionsModal onClose={() => setShowDefs(false)} />}
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "0 24px 24px" }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", WebkitOverflowScrolling: "touch", padding: "0 24px 24px" }}>
+        <div style={{ minWidth: 950, width: "100%" }}>
 
-        {/* AVG Topic Score chart (Card 180) */}
+        {/* AVG Topic Score chart — driven by the same filtered rows as the table */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-4 overflow-hidden" style={{ height: 340 }}>
-          <AvgTopicScoreChart />
+          <AvgTopicScoreChart
+            rows={rows}
+            topicCol={cols.findIndex((c) => c.display_name === "Topic")}
+            scoreCol={cols.findIndex((c) => c.display_name === "Topic Score")}
+            loading={loading}
+          />
         </div>
 
         {/* Section title */}
@@ -412,7 +438,18 @@ function TopicInsightsContent() {
           </div>
           {rows.length > 0 && (
             <button
-              onClick={() => exportToCsv("topic-insights", cols, rows)}
+              onClick={() => {
+                // Raw order (card 181): 0=District 1=Domain 2=Campaign 3=State 4=Topic 5=Topic_Score 6=Date
+                // Desired: District, Domain, State, Campaign, Topic, Topic Score, Date
+                const ORDER = [0, 1, 3, 2, 4, 5, 6];
+                const exportCols = ORDER.map((i) => cols[i]).filter(Boolean);
+                // Strip campaign description to just the C# code (e.g. "C7: July..." → "C7")
+                const exportRows = rows.map((r) => ORDER.map((i) => {
+                  if (i === 2) return String(r[i] ?? "").split(":")[0].trim();
+                  return r[i];
+                }));
+                exportToCsv("topic-insights", exportCols, exportRows);
+              }}
               className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white transition-colors"
             >
               <Download size={13} /> Export CSV
@@ -425,10 +462,11 @@ function TopicInsightsContent() {
           <div className="flex items-center justify-center h-64 text-red-500 text-sm bg-white border border-t-0 border-gray-200 rounded-b-xl">{error}</div>
         )}
         {!loading && !error && (
-          <div className="border border-t-0 border-gray-200 rounded-b-xl shadow-sm" style={{ clipPath: "inset(0 round 0 0 0.75rem 0.75rem)" }}>
+          <div className="border border-t-0 border-gray-200 rounded-b-xl shadow-sm overflow-hidden">
             <DataTable cols={cols} rows={rows} sort={sort} onSort={setSort} headerTop={titleBarHeight} />
           </div>
         )}
+        </div>
       </div>
     </div>
   );

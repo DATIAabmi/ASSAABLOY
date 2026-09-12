@@ -29,7 +29,15 @@ function interpolateBlue(t: number): string {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
-export default function UsStateChoropleth({ valueByState }: { valueByState: Record<string, number> }) {
+export default function UsStateChoropleth({
+  valueByState,
+  selectedState,
+  onStateClick,
+}: {
+  valueByState: Record<string, number>;
+  selectedState?: string;
+  onStateClick?: (abbr: string) => void;
+}) {
   const max = Math.max(1, ...Object.values(valueByState));
 
   return (
@@ -40,16 +48,18 @@ export default function UsStateChoropleth({ valueByState }: { valueByState: Reco
             geographies.map((geo) => {
               const abbr = STATE_NAME_TO_ABBR[geo.properties.name as string];
               const value = abbr ? valueByState[abbr] ?? 0 : 0;
+              const isSelected = abbr && abbr === selectedState;
               return (
                 <Geography
                   key={geo.rsmKey}
                   geography={geo}
-                  fill={interpolateBlue(value / max)}
-                  stroke="#ffffff"
-                  strokeWidth={0.5}
+                  fill={isSelected ? "#f97316" : interpolateBlue(value / max)}
+                  stroke={isSelected ? "#c2410c" : "#ffffff"}
+                  strokeWidth={isSelected ? 1.5 : 0.5}
+                  onClick={() => abbr && onStateClick?.(abbr)}
                   style={{
-                    default: { outline: "none" },
-                    hover: { outline: "none", opacity: 0.85 },
+                    default: { outline: "none", cursor: onStateClick ? "pointer" : "default" },
+                    hover: { outline: "none", opacity: 0.8 },
                     pressed: { outline: "none" },
                   }}
                 />
