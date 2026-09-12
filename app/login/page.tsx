@@ -86,9 +86,9 @@ function LoginForm() {
           {/* Logo */}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 28 }}>
             <Image
-              src="/assaabloy-logo.svg"
-              alt="ASSA ABLOY"
-              width={370}
+              src="/comlo-logo.png"
+              alt="COMLO Solutions"
+              width={300}
               height={100}
               style={{ height: 64, width: "auto", objectFit: "contain" }}
             />
