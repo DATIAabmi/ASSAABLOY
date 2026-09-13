@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Loader2, ArrowUp, ArrowDown, ArrowUpDown, Download } from "lucide-react";
 import DashboardHeader from "@/components/DashboardHeader";
 import { useFilter } from "@/components/FilterContext";
@@ -38,6 +38,19 @@ function GeographyTable({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sort, setSort] = useState<SortState>({ col: 2, dir: "desc" });
+
+  const titleBarRef = useRef<HTMLDivElement>(null);
+  const [titleBarHeight, setTitleBarHeight] = useState(0);
+
+  useLayoutEffect(() => {
+    const el = titleBarRef.current;
+    if (!el) return;
+    const measure = () => { const h = el.offsetHeight; if (h > 0) setTitleBarHeight(h); };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -132,7 +145,7 @@ function GeographyTable({
 
   return (
     <div>
-      <div className="bg-gray-900 text-white px-5 py-3 rounded-t-xl flex items-center justify-between">
+      <div ref={titleBarRef} className="sticky top-0 z-20 bg-gray-900 text-white px-5 py-3 rounded-t-xl flex items-center justify-between">
         <span className="font-bold text-sm tracking-wide uppercase">Engagements By Geography</span>
         {filteredRows.length > 0 && (
           <button

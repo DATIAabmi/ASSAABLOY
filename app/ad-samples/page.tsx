@@ -210,11 +210,16 @@ export default function Page() {
           zIndex: 1,
         }}
       >
-        <div style={{ flexShrink: 0, padding: "16px 24px 12px" }}>
+        <div style={{ flexShrink: 0, padding: "16px 24px 0" }}>
           <DashboardHeader />
+          <div className="sticky top-0 z-20 bg-gray-900 text-white px-5 py-3 rounded-t-xl">
+            <span className="font-bold text-sm tracking-wide uppercase">{TAB_LABEL}</span>
+          </div>
         </div>
-        <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-          <AdSamplesEmbed />
+        <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "0 24px 24px" }}>
+          <div className="border border-t-0 border-gray-200 rounded-b-xl overflow-hidden shadow-sm bg-white" style={{ height: "100%" }}>
+            <AdSamplesEmbed />
+          </div>
         </div>
       </div>
     </MetabaseProviderWrapper>
