@@ -165,7 +165,7 @@ function GeographyTable({
         <div className="flex items-center justify-center h-48 text-red-500 text-sm bg-white border border-t-0 border-gray-200 rounded-b-xl">{error}</div>
       )}
       {!loading && !error && (
-        <div className="border border-t-0 border-gray-200 rounded-b-xl overflow-hidden shadow-sm bg-white">
+        <div className="border border-t-0 border-gray-200 rounded-b-xl shadow-sm bg-white" style={{ clipPath: "inset(0 round 0 0 0.75rem 0.75rem)" }}>
           {filteredRows.length === 0 ? (
             <div className="flex items-center justify-center h-48 text-gray-400 text-sm bg-white">No results</div>
           ) : (
