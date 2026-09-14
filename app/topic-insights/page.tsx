@@ -229,7 +229,7 @@ function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
   });
 
   // col order: #, District, Domain, State, Campaign, Date, Topic, Topic Score
-  const COL_WIDTHS = ["2%", "20%", "13%", "5%", "11%", "8%", "29%", "12%"];
+  const COL_WIDTHS = ["2%", "26%", "13%", "5%", "11%", "8%", "23%", "12%"];
 
   return (
     <div className="bg-white">
@@ -273,7 +273,11 @@ function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
                   <td key={j}
                     style={{ textAlign: isLeft ? "left" : "center" }}
                     className={`px-2 py-1.5 ${isNum ? "tabular-nums" : ""} text-gray-800`}>
-                    <div className="truncate" title={text}>{text}</div>
+                    {colName === "District" ? (
+                      <div className="whitespace-normal break-words leading-snug">{text}</div>
+                    ) : (
+                      <div className="truncate" title={text}>{text}</div>
+                    )}
                   </td>
                 );
               })}
