@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ASSA ABLOY | Intelligence Dashboard",
+  title: "ASSA ABLOY | DATIA ABMi Dashboard",
   description: "Intelligence Dashboard",
 };
 
