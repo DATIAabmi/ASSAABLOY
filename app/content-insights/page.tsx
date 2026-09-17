@@ -88,10 +88,12 @@ function ChannelBreakdownTable({ rows }: { rows: ChannelBreakdownRow[] }) {
 }
 
 // ─── Donut Chart ──────────────────────────────────────────────────────────────
+// Same palette as the Ecosystem Insights donut (components/ChannelPerformanceChart.tsx).
 
-const COLORS = ["#111827", "#88BF4D", "#EF8C8C", "#F9D45C", "#A989C5", "#98D9D9"];
+const COLORS = ["#509EE3", "#88BF4D", "#EF8C8C", "#F9D45C", "#A989C5", "#98D9D9"];
 
 function ClicksDonutChart({ rows }: { rows: ChannelClickRow[] }) {
+  const [selected, setSelected] = useState<number | null>(null);
   const total = rows.reduce((s, r) => s + (r[1] ?? 0), 0);
   const R = 70, SW = 36, CX = 100, CY = 100;
   const circumference = 2 * Math.PI * R;
@@ -110,12 +112,16 @@ function ClicksDonutChart({ rows }: { rows: ChannelClickRow[] }) {
       <div className="flex items-center gap-8 w-full">
         <div className="shrink-0">
           <svg viewBox="0 0 200 200" width={180} height={180}>
-            <circle cx={CX} cy={CY} r={R} fill="none" stroke="#f3f4f6" strokeWidth={SW} />
+            {/* No background track — only the channels we actually cover are drawn. */}
             {segments.map((seg, i) => (
               <circle key={i} cx={CX} cy={CY} r={R} fill="none"
-                stroke={seg.color} strokeWidth={SW}
+                stroke={seg.color}
+                strokeWidth={selected === i ? SW + 8 : SW}
+                strokeOpacity={selected === null || selected === i ? 1 : 0.3}
                 strokeDasharray={`${seg.pct * circumference} ${circumference}`}
-                strokeDashoffset={seg.offset} />
+                strokeDashoffset={seg.offset}
+                onClick={() => setSelected((s) => (s === i ? null : i))}
+                style={{ cursor: "pointer", transition: "stroke-width 0.15s ease, stroke-opacity 0.15s ease" }} />
             ))}
             <text x={CX} y={CY - 8} textAnchor="middle" fontSize={11} fill="#6b7280" fontFamily="inherit">Total Clicks</text>
             <text x={CX} y={CY + 10} textAnchor="middle" fontSize={14} fontWeight="700" fill="#111827" fontFamily="inherit">
@@ -125,11 +131,15 @@ function ClicksDonutChart({ rows }: { rows: ChannelClickRow[] }) {
         </div>
         <div className="flex flex-col gap-3 flex-1 min-w-0">
           {segments.map((seg, i) => (
-            <div key={i} className="flex items-center gap-3">
+            <div key={i}
+              onClick={() => setSelected((s) => (s === i ? null : i))}
+              className="flex items-center gap-3 cursor-pointer rounded-lg px-1 -mx-1 py-0.5 transition-colors hover:bg-gray-50"
+              style={{ opacity: selected === null || selected === i ? 1 : 0.4 }}
+            >
               <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-gray-800 truncate">{seg.label}</span>
+                  <span className={`text-sm truncate ${selected === i ? "font-bold text-gray-900" : "font-medium text-gray-800"}`}>{seg.label}</span>
                   <span className="text-sm tabular-nums text-gray-500 shrink-0">{Math.round(seg.clicks).toLocaleString()}</span>
                 </div>
                 <div className="mt-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
