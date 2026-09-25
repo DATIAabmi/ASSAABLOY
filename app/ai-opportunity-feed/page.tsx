@@ -18,7 +18,7 @@ function extractDomain(url: string | null | undefined): string {
 }
 
 // Full column grid — table scrolls horizontally
-// # | District | Domain | State | Campaign | Keywords | Source Link | Date | Category | Source | Signal Analysis | Strength | Source Text
+// # | District | Domain | State | Campaign | Keywords | Source Link | Date | Category | Source | Signal Analysis | Strength | Source Text | Market
 const COLS = [
   { key: "#",               width: 30,  sort: false, flex: false },
   { key: "District",        width: 240, sort: true,  flex: false },
@@ -33,6 +33,7 @@ const COLS = [
   { key: "Signal Analysis", width: 240, sort: true,  flex: true  },
   { key: "Strength",        width: 80,  sort: true,  flex: false },
   { key: "Source Text",     width: 280, sort: false, flex: true  },
+  { key: "Market",          width: 80,  sort: true,  flex: false },
 ];
 
 const SORT_OPTIONS = COLS.filter((c) => c.sort);
@@ -97,6 +98,7 @@ function getRowValue(row: Signal, colKey: string): unknown {
     case "Source":          return row["Source"];
     case "Signal Analysis": return row["Signal Analysis"];
     case "Strength":        return row["Strength"];
+    case "Market":          return row["Market"];
     default:                return null;
   }
 }
@@ -112,6 +114,7 @@ export default function AIOpportunityFeed() {
   const [filterState,    setFilterState]    = useState<string[]>([]);
   const [filterCategory, setFilterCategory] = useState<string[]>([]);
   const [filterSource,   setFilterSource]   = useState<string[]>([]);
+  const [filterMarket,   setFilterMarket]   = useState<string[]>([]);
 
   // Clear local filters when the global Reset Filters button is pressed
   useEffect(() => {
@@ -121,6 +124,7 @@ export default function AIOpportunityFeed() {
     setFilterState([]);
     setFilterCategory([]);
     setFilterSource([]);
+    setFilterMarket([]);
     setSort({ col: "Date", dir: "desc" });
   }, [resetSignal]);
 
@@ -151,6 +155,7 @@ export default function AIOpportunityFeed() {
 
   const categoryOptions = [...new Set(rows.map((r) => String(r["Category"] ?? "")).filter(Boolean))].sort();
   const sourceOptions   = [...new Set(rows.map((r) => String(r["Source"]   ?? "")).filter(Boolean))].sort();
+  const marketOptions   = [...new Set(["K12", "HE", ...rows.map((r) => String(r["Market"] ?? "")).filter(Boolean)])];
 
   const districtOf = (r: Signal) => String(r["Organization"] ?? "");
   const domainOf   = (r: Signal) => String((r["Domain"] as string) || extractDomain(r["Source Link"] as string) || "");
@@ -165,6 +170,7 @@ export default function AIOpportunityFeed() {
   const filtered = rows.filter((r) => {
     if (filterCategory.length && !filterCategory.includes((r["Category"] as string) ?? "")) return false;
     if (filterSource.length   && !filterSource.includes((r["Source"] as string) ?? ""))     return false;
+    if (filterMarket.length   && !filterMarket.includes(String(r["Market"] ?? "")))          return false;
     if (filterDistrict.length && !filterDistrict.includes(districtOf(r))) return false;
     if (filterDomain.length   && !filterDomain.includes(domainOf(r)))     return false;
     if (filterState.length    && !filterState.includes(stateOf(r)))       return false;
@@ -183,7 +189,7 @@ export default function AIOpportunityFeed() {
 
   const csvCols = [
     "Organization", "Domain", "State", "Campaign #", "Keywords",
-    "Source Link", "Date", "Category", "Source", "Signal Analysis", "Strength", "Source Text",
+    "Source Link", "Date", "Category", "Source", "Signal Analysis", "Strength", "Source Text", "Market",
   ].map((k) => ({ display_name: k, base_type: "type/Text" }));
   const csvRows = sorted.map((r) => csvCols.map((c) => r[c.display_name]));
 
@@ -195,6 +201,7 @@ export default function AIOpportunityFeed() {
         <DashboardHeader />
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2 flex-wrap">
+            <MultiSelectDropdown label="Market"   value={filterMarket}   onChange={setFilterMarket}   options={marketOptions} minWidth={130} />
             <MultiSelectDropdown label="District" value={filterDistrict} onChange={setFilterDistrict} search={searchOptions(districtOf)} />
             <MultiSelectDropdown label="Domain"   value={filterDomain}   onChange={setFilterDomain}   search={searchOptions(domainOf)} />
             <MultiSelectDropdown label="State"    value={filterState}    onChange={setFilterState}    search={searchOptions(stateOf)} minWidth={110} />
@@ -334,6 +341,11 @@ export default function AIOpportunityFeed() {
                       {/* Source Text — same color as Signal Analysis */}
                       <div className="text-xs text-gray-800 pt-0.5 break-words leading-snug">
                         {(row["Source Text"] as string) || "—"}
+                      </div>
+
+                      {/* Market — K12 / HE */}
+                      <div className="text-xs text-gray-600 pt-0.5">
+                        {(row["Market"] as string) || "—"}
                       </div>
                     </div>
                   );
