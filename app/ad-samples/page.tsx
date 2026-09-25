@@ -123,7 +123,7 @@ export default function Page() {
       <div style={{ flexShrink: 0, padding: "16px 24px 0" }}>
         <DashboardHeader />
         <div className="sticky top-0 z-20 bg-gray-900 text-white px-5 py-3 rounded-t-xl">
-          <span className="font-bold text-sm tracking-wide uppercase">{TAB_LABEL}</span>
+          <span className="font-bold text-sm tracking-wide uppercase">Campaign Creative</span>
         </div>
       </div>
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "0 24px 24px" }}>

@@ -12,7 +12,6 @@ import {
   BookOpen,
   FileText,
   MonitorPlay,
-  SlidersHorizontal,
   ScrollText,
   Sparkles,
   MapPin,
@@ -20,14 +19,14 @@ import {
 
 const navItems = [
   { label: "Ecosystem Insights", icon: Globe, href: "/" },
-  { label: "Engaged Users by District", icon: Users, href: "/engaged-users" },
+  { label: "Engaged Users\nby District", icon: Users, href: "/engaged-users" },
   { label: "Account Intelligence", icon: Sparkles, href: "/ai-opportunity-feed" },
   { label: "Persona Insights", icon: UserCircle, href: "/persona-insights" },
   { label: "Geo Insights", icon: MapPin, href: "/geo-insights" },
   { label: "Leads Insights", icon: TrendingUp, href: "/leads-insights" },
   { label: "Topic Insights", icon: BookOpen, href: "/topic-insights" },
   { label: "Content Insights", icon: FileText, href: "/content-insights" },
-  { label: "Ad Samples", icon: MonitorPlay, href: "/ad-samples" },
+  { label: "Campaign Creative", icon: MonitorPlay, href: "/ad-samples" },
   // Hidden to match RAS's current nav exactly ("re-enable when ready" there
   // too) — the page/route still works with real ASSA ABLOY data at
   // /school-board-minutes, just not linked from the sidebar.
@@ -51,7 +50,7 @@ export default function Sidebar() {
       {/* Branding */}
       <div className="px-4 py-4 border-b border-gray-100">
         {lastUpdated && (
-          <p className="text-[10px] text-blue-500 font-medium mb-3">
+          <p className="text-[12px] text-blue-500 font-medium mb-3">
             Last Updated: {lastUpdated}
           </p>
         )}
@@ -62,7 +61,7 @@ export default function Sidebar() {
           height={38}
           priority
         />
-        <p className="text-[10px] font-semibold tracking-widest text-gray-400 uppercase mt-2">
+        <p className="text-[10px] font-semibold tracking-wide text-gray-400 uppercase mt-2 whitespace-nowrap">
           Intelligence Dashboard
         </p>
       </div>
@@ -76,7 +75,7 @@ export default function Sidebar() {
             <Link
               key={item.label}
               href={item.href}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left ${
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[0.84rem] font-medium transition-colors text-left ${
                 isActive
                   ? "bg-indigo-50 text-indigo-700"
                   : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
@@ -86,19 +85,12 @@ export default function Sidebar() {
                 size={16}
                 className={isActive ? "text-indigo-600" : "text-gray-400"}
               />
-              {item.label}
+              <span style={{ whiteSpace: "pre-line" }}>{item.label}</span>
             </Link>
           );
         })}
       </nav>
 
-      {/* Bottom */}
-      <div className="px-3 py-4 border-t border-gray-100">
-        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors text-left">
-          <SlidersHorizontal size={16} className="text-gray-400" />
-          Filters
-        </button>
-      </div>
     </aside>
   );
 }

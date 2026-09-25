@@ -1,15 +1,18 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, Loader2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Download, ExternalLink, Loader2 } from "lucide-react";
 import DashboardHeader from "@/components/DashboardHeader";
 import { useFilter } from "@/components/FilterContext";
 import MultiSelectDropdown from "@/components/MultiSelectDropdown";
+import { exportDivToPng } from "@/lib/exportChartToPng";
+import { channelColor as getChannelColor } from "@/lib/channelColors";
+import DonutBreakdown from "@/components/DonutBreakdown";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 // Card 205 cols: 0=Image 1=AssetName 2=AssetLink 3=Campaign 4=Impressions 5=Clicks 6=CTR
-type GatedRow = [string, string, string, string, number | string, number | string, string];
+type GatedRow = [string, string, string, string, string, number | string, number | string, string];
 type ChannelBreakdownRow = [string, number, number, number | string];
 type ChannelClickRow = [string, number, number];
 
@@ -52,8 +55,19 @@ function ScalarCard({ label, value }: { label: string; value: string }) {
 
 // ─── Channel Breakdown Table ──────────────────────────────────────────────────
 
-function ChannelBreakdownTable({ rows }: { rows: ChannelBreakdownRow[] }) {
+const COLORS = ["#4F86D9", "#2FA7A0", "#E46F61", "#8A70C9", "#F9D45C", "#98D9D9"];
+
+function channelColor(label: string, allLabels: string[]): string {
+  return getChannelColor(label, allLabels.indexOf(label));
+}
+
+function ChannelBreakdownTable({ rows, activeChannel, onChannelClick }: {
+  rows: ChannelBreakdownRow[];
+  activeChannel: string | null;
+  onChannelClick: (ch: string | null) => void;
+}) {
   const headers = ["Channel", "Impressions", "Clicks", "CTR"];
+  const labels = rows.map((r) => String(r[0] ?? ""));
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="bg-gray-900 text-white px-5 py-3">
@@ -72,14 +86,28 @@ function ChannelBreakdownTable({ rows }: { rows: ChannelBreakdownRow[] }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, i) => (
-              <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="px-4 py-3 text-left text-gray-800 font-medium">{String(row[0] ?? "")}</td>
-                <td className="px-4 py-3 text-right tabular-nums text-gray-800">{fmtNum(row[1])}</td>
-                <td className="px-4 py-3 text-right tabular-nums text-gray-800">{fmtNum(row[2])}</td>
-                <td className="px-4 py-3 text-right tabular-nums text-gray-800">{fmtPct(row[3])}</td>
-              </tr>
-            ))}
+            {rows.map((row, i) => {
+              const ch = String(row[0] ?? "");
+              const isActive = activeChannel === ch;
+              const dimmed = activeChannel !== null && !isActive;
+              const color = channelColor(ch, labels);
+              return (
+                <tr key={i}
+                  onClick={() => onChannelClick(isActive ? null : ch)}
+                  className="border-b border-gray-100 cursor-pointer transition-colors"
+                  style={{ backgroundColor: isActive ? color + "18" : undefined, opacity: dimmed ? 0.4 : 1 }}>
+                  <td className="px-4 py-3 text-left font-medium" style={{ color: isActive ? color : "#1f2937" }}>
+                    <span className="inline-flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                      {ch}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-gray-800">{fmtNum(row[1])}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-gray-800">{fmtNum(row[2])}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-gray-800">{fmtPct(row[3])}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -88,68 +116,75 @@ function ChannelBreakdownTable({ rows }: { rows: ChannelBreakdownRow[] }) {
 }
 
 // ─── Donut Chart ──────────────────────────────────────────────────────────────
-// Same palette as the Ecosystem Insights donut (components/ChannelPerformanceChart.tsx).
 
-const COLORS = ["#509EE3", "#88BF4D", "#EF8C8C", "#F9D45C", "#A989C5", "#98D9D9"];
+type DonutMode = "Clicks" | "Impressions" | "CTR";
 
-function ClicksDonutChart({ rows }: { rows: ChannelClickRow[] }) {
-  const [selected, setSelected] = useState<number | null>(null);
-  const total = rows.reduce((s, r) => s + (r[1] ?? 0), 0);
-  const R = 70, SW = 36, CX = 100, CY = 100;
-  const circumference = 2 * Math.PI * R;
+function ClicksDonutChart({ rows, activeChannel, onChannelClick }: {
+  rows: ChannelBreakdownRow[];
+  activeChannel: string | null;
+  onChannelClick: (ch: string | null) => void;
+}) {
+  const [mode, setMode] = useState<DonutMode>("Clicks");
+  const cardRef = useRef<HTMLDivElement>(null);
+  const getValue = (row: ChannelBreakdownRow): number => {
+    if (mode === "Impressions") return Number(row[1]) || 0;
+    if (mode === "Clicks")      return Number(row[2]) || 0;
+    return Number(row[3]) || 0; // CTR
+  };
 
-  let cumulative = 0;
+  const total = rows.reduce((s, r) => s + getValue(r), 0);
+
+  // For CTR center: show weighted average (total clicks / total impressions)
+  const totalImp = rows.reduce((s, r) => s + (Number(r[1]) || 0), 0);
+  const totalClk = rows.reduce((s, r) => s + (Number(r[2]) || 0), 0);
+  const avgCtr   = totalImp > 0 ? (totalClk / totalImp) * 100 : 0;
+
+  const fmtValue = (v: number) =>
+    mode === "CTR" ? v.toFixed(2) + "%" : Math.round(v).toLocaleString();
+
+  const centerLabel = mode === "CTR" ? "Avg CTR" : `Total ${mode}`;
+  const centerValue = mode === "CTR"
+    ? avgCtr.toFixed(2) + "%"
+    : Math.round(total).toLocaleString();
+
   const segments = rows.map((row, i) => {
-    const pct = total > 0 ? (row[1] ?? 0) / total : 0;
-    const offset = -(cumulative * circumference) + circumference * 0.25;
-    cumulative += pct;
-    return { label: row[0], clicks: row[1] ?? 0, pct, offset, color: COLORS[i % COLORS.length] };
+    const value = getValue(row);
+    const pct = total > 0 ? value / total : 0;
+    return {
+      label: String(row[0]),
+      pct,
+      color: getChannelColor(String(row[0]), i),
+      valueText: `${(pct * 100).toFixed(1)}%`,
+      subText: mode === "CTR" ? `${value.toFixed(2)}% CTR` : `${fmtValue(value)} ${mode.toLowerCase()}`,
+    };
   });
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-      <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">Channel Performance By Clicks</p>
-      <div className="flex items-center gap-8 w-full">
-        <div className="shrink-0">
-          <svg viewBox="0 0 200 200" width={180} height={180}>
-            {/* No background track — only the channels we actually cover are drawn. */}
-            {segments.map((seg, i) => (
-              <circle key={i} cx={CX} cy={CY} r={R} fill="none"
-                stroke={seg.color}
-                strokeWidth={selected === i ? SW + 8 : SW}
-                strokeOpacity={selected === null || selected === i ? 1 : 0.3}
-                strokeDasharray={`${seg.pct * circumference} ${circumference}`}
-                strokeDashoffset={seg.offset}
-                onClick={() => setSelected((s) => (s === i ? null : i))}
-                style={{ cursor: "pointer", transition: "stroke-width 0.15s ease, stroke-opacity 0.15s ease" }} />
-            ))}
-            <text x={CX} y={CY - 8} textAnchor="middle" fontSize={11} fill="#6b7280" fontFamily="inherit">Total Clicks</text>
-            <text x={CX} y={CY + 10} textAnchor="middle" fontSize={14} fontWeight="700" fill="#111827" fontFamily="inherit">
-              {Math.round(total).toLocaleString()}
-            </text>
-          </svg>
-        </div>
-        <div className="flex flex-col gap-3 flex-1 min-w-0">
-          {segments.map((seg, i) => (
-            <div key={i}
-              onClick={() => setSelected((s) => (s === i ? null : i))}
-              className="flex items-center gap-3 cursor-pointer rounded-lg px-1 -mx-1 py-0.5 transition-colors hover:bg-gray-50"
-              style={{ opacity: selected === null || selected === i ? 1 : 0.4 }}
-            >
-              <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <span className={`text-sm truncate ${selected === i ? "font-bold text-gray-900" : "font-medium text-gray-800"}`}>{seg.label}</span>
-                  <span className="text-sm tabular-nums text-gray-500 shrink-0">{Math.round(seg.clicks).toLocaleString()}</span>
-                </div>
-                <div className="mt-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${seg.pct * 100}%`, backgroundColor: seg.color }} />
-                </div>
-                <div className="text-xs text-gray-400 mt-0.5">{(seg.pct * 100).toFixed(1)}%</div>
-              </div>
-            </div>
-          ))}
-        </div>
+    <div ref={cardRef}>
+      <div className="mb-2">
+        <span className="font-bold text-sm tracking-wide uppercase text-gray-700">Channel Performance</span>
+      </div>
+      <div>
+      <div className="flex items-center gap-1 mb-3 p-1 bg-gray-100 rounded-lg w-fit">
+        {(["Clicks", "Impressions", "CTR"] as DonutMode[]).map((m) => (
+          <button key={m} onClick={() => setMode(m)}
+            className="text-xs px-3 py-1.5 rounded-md font-semibold transition-all"
+            style={{
+              background: mode === m ? "#fff" : "transparent",
+              color: mode === m ? "#111827" : "#6b7280",
+              boxShadow: mode === m ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
+            }}>
+            {m}
+          </button>
+        ))}
+      </div>
+      <DonutBreakdown
+        segments={segments}
+        centerLabel={centerLabel}
+        centerValue={centerValue}
+        selected={activeChannel}
+        onSelect={(label) => onChannelClick(activeChannel === label ? null : label)}
+      />
       </div>
     </div>
   );
@@ -157,11 +192,11 @@ function ClicksDonutChart({ rows }: { rows: ChannelClickRow[] }) {
 
 // ─── Gated Content Table ──────────────────────────────────────────────────────
 
-function GatedContentTable({ campaign, dateStart, dateEnd }: { campaign: string[]; dateStart: string; dateEnd: string }) {
+function GatedContentTable({ campaign, dateStart, dateEnd, filterChannel }: { campaign: string[]; dateStart: string; dateEnd: string; filterChannel: string[] }) {
   const [rows, setRows] = useState<GatedRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [sort, setSort] = useState<SortState>({ col: 4, dir: "desc" });
+  const [sort, setSort] = useState<SortState>({ col: 5, dir: "desc" });
 
   const titleBarRef = useRef<HTMLDivElement>(null);
   const [titleBarHeight, setTitleBarHeight] = useState(0);
@@ -179,14 +214,15 @@ function GatedContentTable({ campaign, dateStart, dateEnd }: { campaign: string[
   const fetchData = useCallback(() => {
     setLoading(true);
     const params = new URLSearchParams();
-    if (campaign.length) params.set("campaign",  campaign.join(","));
-    if (dateStart)       params.set("dateStart", dateStart);
-    if (dateEnd)         params.set("dateEnd",   dateEnd);
+    if (campaign.length)      params.set("campaign",  campaign.join(","));
+    if (filterChannel.length) params.set("channel",   filterChannel.join(","));
+    if (dateStart)            params.set("dateStart", dateStart);
+    if (dateEnd)              params.set("dateEnd",   dateEnd);
     fetch(`/api/q205-data?${params.toString()}`)
       .then((r) => r.json())
       .then((d) => { setRows(d.rows ?? []); setLoading(false); })
       .catch(() => { setError("Failed to load"); setLoading(false); });
-  }, [campaign, dateStart, dateEnd]);
+  }, [campaign, filterChannel, dateStart, dateEnd]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -194,9 +230,10 @@ function GatedContentTable({ campaign, dateStart, dateEnd }: { campaign: string[
     { label: "Image",             col: -1 },
     { label: "Asset Name & Link", col: 1 },
     { label: "Campaign",          col: 3 },
-    { label: "Impressions",       col: 4 },
-    { label: "Clicks",            col: 5 },
-    { label: "CTR",               col: 6 },
+    { label: "Channel",           col: 4 },
+    { label: "Impressions",       col: 5 },
+    { label: "Clicks",            col: 6 },
+    { label: "CTR",               col: 7 },
   ];
 
   const sorted = [...rows].sort((a, b) => {
@@ -234,9 +271,9 @@ function GatedContentTable({ campaign, dateStart, dateEnd }: { campaign: string[
               <tr className="border-b border-gray-200">
                 {HEADERS.map((h) => (
                   <th key={h.label} onClick={() => handleSort(h.col)}
-                    className={`sticky z-10 bg-white px-4 py-3 font-semibold whitespace-nowrap select-none border-b border-gray-200 ${h.col >= 0 ? "cursor-pointer hover:opacity-70" : ""} ${h.col === 3 ? "text-center" : h.col >= 4 ? "text-right" : "text-left"}`}
+                    className={`sticky z-10 bg-white px-4 py-3 font-semibold whitespace-nowrap select-none border-b border-gray-200 ${h.col >= 0 ? "cursor-pointer hover:opacity-70" : ""} ${h.col === 3 || h.col === 4 ? "text-center" : h.col >= 5 ? "text-right" : "text-left"}`}
                     style={{ color: "#111827", top: titleBarHeight }}>
-                    <span className={`inline-flex items-center gap-1 ${h.col === 3 ? "justify-center" : h.col >= 4 ? "justify-end" : "justify-start"}`}>
+                    <span className={`inline-flex items-center gap-1 ${h.col === 3 || h.col === 4 ? "justify-center" : h.col >= 5 ? "justify-end" : "justify-start"}`}>
                       {h.label}
                       {h.col >= 0 && (
                         sort.col === h.col
@@ -269,22 +306,26 @@ function GatedContentTable({ campaign, dateStart, dateEnd }: { campaign: string[
                       <span className="text-gray-800 font-medium">{String(row[1] ?? "")}</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-center text-gray-700 whitespace-nowrap text-xs font-medium">
-                    {String(row[3] ?? "").split(":")[0].trim()}
+                  <td className="px-4 py-3 text-center text-gray-700 text-xs font-medium">
+                    {String(row[3] ?? "").split(",").map((c) => c.trim().split(":")[0].trim()).join(", ")}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-gray-800 whitespace-nowrap">{fmtNum(row[4])}</td>
+                  <td className="px-4 py-3 text-center text-gray-700 whitespace-nowrap text-xs font-medium">
+                    {String(row[4] ?? "")}
+                  </td>
                   <td className="px-4 py-3 text-right tabular-nums text-gray-800 whitespace-nowrap">{fmtNum(row[5])}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-gray-800 whitespace-nowrap">{String(row[6] ?? "")}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-gray-800 whitespace-nowrap">{fmtNum(row[6])}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-gray-800 whitespace-nowrap">{String(row[7] ?? "")}</td>
                 </tr>
               ))}
               {sorted.length > 0 && (() => {
-                const totalImp = sorted.reduce((s, r) => s + (parseFloat(String(r[4] ?? 0)) || 0), 0);
-                const totalClk = sorted.reduce((s, r) => s + (parseFloat(String(r[5] ?? 0)) || 0), 0);
+                const totalImp = sorted.reduce((s, r) => s + (parseFloat(String(r[5] ?? 0)) || 0), 0);
+                const totalClk = sorted.reduce((s, r) => s + (parseFloat(String(r[6] ?? 0)) || 0), 0);
                 const totalCtr = totalImp > 0 ? `${((totalClk / totalImp) * 100).toFixed(2)}%` : "—";
                 return (
                   <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
                     <td className="px-4 py-3" />
                     <td className="px-4 py-3 text-gray-900">Grand total</td>
+                    <td className="px-4 py-3" />
                     <td className="px-4 py-3" />
                     <td className="px-4 py-3 text-right tabular-nums text-gray-900 whitespace-nowrap">{Math.round(totalImp).toLocaleString()}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-gray-900 whitespace-nowrap">{Math.round(totalClk).toLocaleString()}</td>
@@ -307,6 +348,7 @@ export default function Page() {
   const [data, setData] = useState<ContentData | null>(null);
   const [loading, setLoading] = useState(true);
   const [filterChannel, setFilterChannel] = useState<string[]>([]);
+  const [activeChannel, setActiveChannel] = useState<string | null>(null);
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -325,7 +367,14 @@ export default function Page() {
   useEffect(() => {
     if (resetSignal === 0) return;
     setFilterChannel([]);
+    setActiveChannel(null);
   }, [resetSignal]);
+
+  // Clicking a chart segment syncs both the highlight AND the Gated Content filter
+  const handleChannelClick = useCallback((ch: string | null) => {
+    setActiveChannel(ch);
+    setFilterChannel(ch ? [ch] : []);
+  }, []);
 
   // Derive available channels from loaded data
   const availableChannels = data?.channelBreakdown.map((r) => String(r[0])) ?? [];
@@ -359,7 +408,7 @@ export default function Page() {
           <MultiSelectDropdown
             label="Channel"
             value={filterChannel}
-            onChange={setFilterChannel}
+            onChange={(v) => { setFilterChannel(v); setActiveChannel(v.length === 1 ? v[0] : null); }}
             options={availableChannels}
             minWidth={160}
           />
@@ -382,12 +431,12 @@ export default function Page() {
 
             {/* Channel charts */}
             <div className="grid grid-cols-2 gap-4 mb-4">
-              <ChannelBreakdownTable rows={filteredBreakdown} />
-              <ClicksDonutChart rows={filteredClicks} />
+              <ChannelBreakdownTable rows={filteredBreakdown} activeChannel={activeChannel} onChannelClick={handleChannelClick} />
+              <ClicksDonutChart rows={filteredBreakdown} activeChannel={activeChannel} onChannelClick={handleChannelClick} />
             </div>
 
             {/* Gated Content table */}
-            <GatedContentTable campaign={campaign} dateStart={dateStart} dateEnd={dateEnd} />
+            <GatedContentTable campaign={campaign} dateStart={dateStart} dateEnd={dateEnd} filterChannel={filterChannel} />
           </>
         )}
       </div>

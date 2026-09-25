@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useEffect, useLayoutEffect, useState, useCallback } from "react";
-import { ChevronDown, Loader2, ArrowUp, ArrowDown, ArrowUpDown, Download } from "lucide-react";
+import { useRef, useEffect, useLayoutEffect, useState, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
+import { ChevronDown, Loader2, ArrowUp, ArrowDown, ArrowUpDown, Download, Info, X } from "lucide-react";
 import DashboardHeader from "@/components/DashboardHeader";
 import { useFilter } from "@/components/FilterContext";
 import MetabaseProviderWrapper from "@/components/MetabaseProvider";
@@ -15,16 +16,68 @@ function fetchFieldOptions(field: "district" | "state" | "job_function" | "conte
       .then((d) => d.values ?? []);
 }
 
+// ─── Dashboard Guide modal ────────────────────────────────────────────────────
+
+const DEFINITIONS = [
+  { term: "Filtering",          def: "Use the filters at the top of the page to filter by Campaign, Date Range, District, Domain, or State." },
+  { term: "Reset",              def: "To reset filters, click the Reset Filters button at the top right of the page." },
+  { term: "Sorting",            def: "Sort the table by clicking any column header or using the Sort By menu at the top right of the page." },
+  { term: "Export",             def: "Use Export All at the top of the page to export data from all dashboard views. Use Export within an individual dashboard view to export data from that view only." },
+  { term: "Intel",              def: "Account Intelligence signals including School Board Minutes, RFPs/Bids, Grants/Bonds, Strategic Initiatives, Leadership Changes, and District News. See the Account Intelligence dashboard for details." },
+  { term: "Topic",              def: "Reading Behavior signals indicating above-baseline content consumption on relevant topics. See the Topic Insights dashboard for details." },
+  { term: "Engagements",        def: "Total engagement activity, including ad clicks, email opens, and asset downloads." },
+  { term: "Engaged Users",      def: "Unique users who engaged with your content or campaign." },
+  { term: "Leads",              def: "Unique content downloads by target personas." },
+  { term: "Total Downloads",    def: "Total content assets downloaded by contacts." },
+  { term: "Intent Score",       def: "A numerical score reflecting a district's overall level of buying activity based on Account Intelligence, Reading Behavior, and engagement signals." },
+  { term: "Intent Score Trend", def: "Change in Intent Score compared with the prior campaign, indicating whether account activity has increased or decreased." },
+];
+
+function DefinitionsModal({ onClose }: { onClose: () => void }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  if (!mounted) return null;
+
+  return createPortal(
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)" }} onMouseDown={onClose} />
+      <div
+        style={{ position: "relative", background: "#fff", borderRadius: 16, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", border: "1px solid #f0f0f0", padding: 24, maxWidth: 440, width: "calc(100% - 32px)" }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "#111" }}>Dashboard Guide</span>
+          <button type="button" onClick={onClose} style={{ color: "#9ca3af", cursor: "pointer", background: "none", border: "none", padding: 0 }}>
+            <X size={16} />
+          </button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {DEFINITIONS.map(({ term, def }) => (
+            <div key={term} style={{ display: "flex", gap: 12 }}>
+              <span style={{ fontWeight: 700, fontSize: 12, color: "#111", flexShrink: 0, minWidth: 80, paddingTop: 1 }}>{term}</span>
+              <span style={{ fontSize: 12, color: "#4b5563", lineHeight: 1.6 }}>{def}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 type SortDir = "asc" | "desc";
 interface SortState { col: number; dir: SortDir }
 
 const SORT_COLUMNS = [
   { label: "District",        index: 0 },
+  { label: "Domain",          index: 1 },
   { label: "Campaign",        index: 2 },
   { label: "State",           index: 3 },
   { label: "Job Function",    index: 4 },
   { label: "Total Downloads", index: 5 },
-  { label: "Intel",            index: 6 },
 ];
 
 function SortDropdown({ sort, onSort }: { sort: SortState; onSort: (s: SortState) => void }) {
@@ -43,10 +96,10 @@ function SortDropdown({ sort, onSort }: { sort: SortState; onSort: (s: SortState
   return (
     <div ref={ref} className="relative shrink-0">
       <button onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm hover:border-blue-400 transition-colors">
+        className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-white hover:border-blue-400 transition-colors">
         <ArrowUpDown size={13} className="text-gray-400" />
-        <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Sort by:</span>
-        <span className="text-blue-600 font-medium">{current?.label ?? "Total Downloads"}</span>
+        <span className="text-gray-400 text-[13px] font-bold uppercase tracking-wider">Sort by:</span>
+        <span className="text-blue-600 font-semibold" style={{ fontSize: 13 }}>{current?.label ?? "Total Downloads"}</span>
         <span className="text-gray-400 text-xs">{sort.dir === "asc" ? "↑" : "↓"}</span>
         <ChevronDown size={13} className="text-gray-400 shrink-0" />
       </button>
@@ -72,16 +125,22 @@ function SortDropdown({ sort, onSort }: { sort: SortState; onSort: (s: SortState
 type Col = { display_name: string; base_type: string };
 type Row = (string | number | null)[];
 const NUMBER_TYPES = new Set(["type/Integer","type/BigInteger","type/Float","type/Decimal","type/Number"]);
-const FORCE_CENTER_COLS = new Set(["Campaign", "State", "Intel"]);
-const HEADER_LABELS: Record<string, string> = { "District Domain": "Domain" };
-// Visual column order: District, Domain, State, Campaign, SBM, Job Function, Total Downloads
-// Raw data order (card 174 + SBM join): 0=District 1=Domain 2=Campaign 3=State 4=Job Function 5=Total Downloads 6=SBM
-const COL_ORDER = [0, 1, 3, 2, 6, 4, 5];
 
-function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
+// Raw: 0=District 1=Domain 2=Campaign 3=State 4=Job Function 5=Total Downloads 6=Intel
+const LI_COLS = [
+  { label: "#",               width: 36,  align: "center" as const, colIdx: -1 },
+  { label: "District",        width: 360, align: "left"   as const, colIdx: 0  },
+  { label: "Domain",          width: 220, align: "left"   as const, colIdx: 1  },
+  { label: "State",           width: 70,  align: "center" as const, colIdx: 3  },
+  { label: "Campaign",        width: 80,  align: "center" as const, colIdx: 2  },
+  { label: "Job Function",    width: 300, align: "left"   as const, colIdx: 4  },
+  { label: "Total Downloads", width: 110, align: "center" as const, colIdx: 5  },
+];
+const LI_GRID = LI_COLS.map(c => `${c.width}px`).join(" ");
+
+function DataTable({ cols, rows, sort, onSort }: {
   cols: Col[]; rows: Row[];
   sort: SortState; onSort: (s: SortState) => void;
-  headerTop?: number;
 }) {
   if (rows.length === 0) {
     return <div className="flex items-center justify-center h-64 text-gray-400 text-sm">No results</div>;
@@ -98,50 +157,23 @@ function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
 
   return (
     <div className="bg-white">
-      <table className="text-xs border-collapse" style={{ minWidth: 1100 }}>
-        <thead>
-          <tr className="border-b border-gray-200">
-            <th className="sticky z-10 bg-white px-3 py-2 w-12 text-xs font-bold border-b border-gray-200" style={{ color: "#111827", textAlign: "center", top: headerTop }}>#</th>
-            {COL_ORDER.map((j) => {
-              const col = cols[j];
-              if (!col) return null;
-              const isNum = NUMBER_TYPES.has(col.base_type);
-              const isCenter = isNum || FORCE_CENTER_COLS.has(col.display_name);
-              const active = sort.col === j;
-              return (
-                <th key={j}
-                  onClick={() => onSort({ col: j, dir: active && sort.dir === "desc" ? "asc" : "desc" })}
-                  className="sticky z-10 bg-white px-4 py-2 font-semibold whitespace-nowrap cursor-pointer select-none hover:opacity-70 border-b border-gray-200"
-                  style={{ color: "#111827", textAlign: isCenter ? "center" : "left", top: headerTop }}>
-                  <span className={`inline-flex items-center gap-1 ${isCenter ? "justify-center" : ""}`}>
-                    {HEADER_LABELS[col.display_name] ?? col.display_name}
-                    {active ? (sort.dir === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />) : <ArrowUpDown size={11} className="opacity-30" />}
-                  </span>
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((row, i) => (
-            <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-              <td className="px-3 py-1.5 text-gray-500 text-xs font-medium" style={{ textAlign: "center" }}>{i + 1}</td>
-              {COL_ORDER.map((j) => {
-                const cell = row[j];
-                const isNum = NUMBER_TYPES.has(cols[j]?.base_type);
-                const colName = cols[j]?.display_name ?? "";
-                const isCenter = isNum || FORCE_CENTER_COLS.has(colName);
-                return (
-                  <td key={j} className={`px-4 py-1.5 text-gray-800 ${isNum ? "tabular-nums" : ""}`}
-                    style={{ textAlign: isCenter ? "center" : "left" }}>
-                    {cell === null || cell === undefined ? "" : String(cell)}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {sorted.map((row, i) => (
+        <div key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors text-xs"
+             style={{ display: "grid", gridTemplateColumns: LI_GRID }}>
+          <span className="px-3 py-1.5 text-center text-gray-400 font-medium">{i + 1}</span>
+          {LI_COLS.slice(1).map((cd) => {
+            const j = cd.colIdx;
+            const cell = row[j];
+            const isNum = NUMBER_TYPES.has(cols[j]?.base_type);
+            return (
+              <span key={j} className={`px-4 py-1.5 text-gray-800 ${isNum ? "tabular-nums" : ""}`}
+                    style={{ textAlign: cd.align, overflowWrap: "anywhere" }}>
+                {cell === null || cell === undefined ? "" : String(cell)}
+              </span>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
@@ -149,11 +181,22 @@ function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
 function LeadsInsightsContent() {
   const { campaign, dateStart, dateEnd, resetSignal } = useFilter();
   const [filterDistrict, setFilterDistrict] = useState<string[]>([]);
+  const [showDefs, setShowDefs] = useState(false);
+  const [filterDomain, setFilterDomain] = useState<string[]>([]);
   const [filterState, setFilterState] = useState<string[]>([]);
   const [filterJobFunction, setFilterJobFunction] = useState<string[]>([]);
   const [filterContentName, setFilterContentName] = useState<string[]>([]);
   const [cols, setCols] = useState<Col[]>([]);
-  const [rows, setRows] = useState<Row[]>([]);
+  const [allRows, setAllRows] = useState<Row[]>([]);
+  const rows = useMemo(
+    () => (filterDomain.length ? allRows.filter((r) => filterDomain.includes(String(r[1] ?? ""))) : allRows),
+    [allRows, filterDomain],
+  );
+  const searchDomains = (query: string): Promise<string[]> => {
+    const ql = query.trim().toLowerCase();
+    const opts = [...new Set(allRows.map((r) => String(r[1] ?? "")).filter(Boolean))].sort();
+    return Promise.resolve((ql ? opts.filter((o) => o.toLowerCase().includes(ql)) : opts).slice(0, 200));
+  };
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sort, setSort] = useState<SortState>({ col: 5, dir: "desc" });
@@ -193,7 +236,7 @@ function LeadsInsightsContent() {
       .then((d: { cols?: unknown[]; rows?: unknown[]; error?: string }) => {
         if (d.error) throw new Error(d.error);
         setCols((d.cols ?? []) as Col[]);
-        setRows((d.rows ?? []) as Row[]);
+        setAllRows((d.rows ?? []) as Row[]);
         setLoading(false);
       })
       .catch((err: Error) => { setError(err.message ?? "Failed to load"); setLoading(false); });
@@ -204,6 +247,7 @@ function LeadsInsightsContent() {
   useEffect(() => {
     if (resetSignal === 0) return;
     setFilterDistrict([]);
+    setFilterDomain([]);
     setFilterState([]);
     setFilterJobFunction([]);
     setFilterContentName([]);
@@ -216,19 +260,30 @@ function LeadsInsightsContent() {
         <DashboardHeader />
 
         {/* Filter + sort row */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+          <div className="flex items-center gap-2 flex-wrap">
             <MultiSelectDropdown label="District"     value={filterDistrict}    onChange={setFilterDistrict}    search={fetchFieldOptions("district")} />
+            <MultiSelectDropdown label="Domain"       value={filterDomain}      onChange={setFilterDomain}      search={searchDomains} />
+            <MultiSelectDropdown label="State"        value={filterState}       onChange={setFilterState}       search={fetchFieldOptions("state")} minWidth={110} />
             <MultiSelectDropdown label="Job Function" value={filterJobFunction} onChange={setFilterJobFunction} search={fetchFieldOptions("job_function")} />
-            <MultiSelectDropdown label="State"        value={filterState}       onChange={setFilterState}       search={fetchFieldOptions("state")} />
             <MultiSelectDropdown label="Content"      value={filterContentName} onChange={setFilterContentName} search={fetchFieldOptions("content_name")} />
+            <button
+              type="button"
+              onClick={() => setShowDefs(true)}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 rounded-lg bg-white transition-colors shrink-0"
+            >
+              <Info size={13} />
+              Dashboard Guide
+            </button>
           </div>
           <SortDropdown sort={sort} onSort={setSort} />
         </div>
+
+        {showDefs && <DefinitionsModal onClose={() => setShowDefs(false)} />}
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", WebkitOverflowScrolling: "touch", padding: "0 24px 24px" }}>
-        <div style={{ minWidth: 1100, width: "100%" }}>
+        <div style={{ minWidth: 1130, width: "100%" }}>
         <LeadsSummaryPanel districts={filterDistrict} states={filterState} />
         <div ref={titleBarRef} className="sticky top-0 z-20 bg-gray-900 text-white px-5 py-3 rounded-t-xl flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -247,7 +302,7 @@ function LeadsInsightsContent() {
                 exportToCsv("leads-insights", exportCols, exportRows);
               }}
               className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white transition-colors">
-              <Download size={13} /> Export CSV
+              <Download size={13} /> Export
             </button>
           )}
         </div>
@@ -261,9 +316,24 @@ function LeadsInsightsContent() {
           <div className="flex items-center justify-center h-64 text-red-500 text-sm bg-white border border-t-0 border-gray-200 rounded-b-xl">{error}</div>
         )}
         {!loading && !error && (
-          <div className="border border-t-0 border-gray-200 rounded-b-xl shadow-sm" style={{ clipPath: "inset(0 round 0 0 0.75rem 0.75rem)" }}>
-            <DataTable cols={cols} rows={rows} sort={sort} onSort={setSort} headerTop={titleBarHeight} />
-          </div>
+          <>
+            <div className="sticky z-10 bg-white border-b border-l border-r border-gray-200 font-semibold text-gray-700"
+                 style={{ fontSize: 10, top: titleBarHeight, display: "grid", gridTemplateColumns: LI_GRID }}>
+              {LI_COLS.map((cd, i) => (
+                <span key={i}
+                  className={`px-3 py-2 inline-flex items-center gap-0.5 select-none ${cd.colIdx >= 0 ? "cursor-pointer hover:opacity-70" : ""} ${cd.align === "center" ? "justify-center" : "justify-start"}`}
+                  onClick={cd.colIdx >= 0 ? () => setSort({ col: cd.colIdx, dir: sort.col === cd.colIdx && sort.dir === "desc" ? "asc" : "desc" }) : undefined}>
+                  {cd.label}
+                  {cd.colIdx >= 0 && (sort.col === cd.colIdx
+                    ? (sort.dir === "asc" ? <ArrowUp size={10} className="shrink-0" /> : <ArrowDown size={10} className="shrink-0" />)
+                    : <ArrowUpDown size={10} className="opacity-30 shrink-0" />)}
+                </span>
+              ))}
+            </div>
+            <div className="border border-t-0 border-gray-200 rounded-b-xl shadow-sm" style={{ overflow: "clip" }}>
+              <DataTable cols={cols} rows={rows} sort={sort} onSort={setSort} />
+            </div>
+          </>
         )}
         </div>
       </div>

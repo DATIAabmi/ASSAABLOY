@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ExternalLink, Loader2, Download, Search, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown } from "lucide-react";
+import { ExternalLink, Loader2, Download, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown } from "lucide-react";
 import DashboardHeader from "@/components/DashboardHeader";
 import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 import { exportToCsv } from "@/lib/exportCsv";
@@ -21,26 +21,26 @@ function extractDomain(url: string | null | undefined): string {
 // # | District | Domain | State | Campaign | Keywords | Source Link | Date | Category | Source | Signal Analysis | Strength | Source Text
 const COLS = [
   { key: "#",               width: 30,  sort: false, flex: false },
-  { key: "District",        width: 120, sort: true,  flex: false },
-  { key: "Domain",          width: 120, sort: true,  flex: false },
-  { key: "State",           width: 40,  sort: true,  flex: false },
-  { key: "Campaign",        width: 65,  sort: true,  flex: false },
-  { key: "Keywords",        width: 160, sort: true,  flex: false },
-  { key: "Source Link",     width: 90,  sort: false, flex: false },
-  { key: "Date",            width: 75,  sort: true,  flex: false },
-  { key: "Category",        width: 115, sort: true,  flex: false },
-  { key: "Source",          width: 90,  sort: true,  flex: false },
-  { key: "Signal Analysis", width: 220, sort: true,  flex: true  },
-  { key: "Strength",        width: 70,  sort: true,  flex: false },
-  { key: "Source Text",     width: 260, sort: false, flex: true  },
+  { key: "District",        width: 240, sort: true,  flex: false },
+  { key: "Domain",          width: 130, sort: true,  flex: false },
+  { key: "State",           width: 50,  sort: true,  flex: false },
+  { key: "Campaign",        width: 100, sort: true,  flex: false },
+  { key: "Keywords",        width: 190, sort: true,  flex: false },
+  { key: "Source Link",     width: 100, sort: false, flex: false },
+  { key: "Date",            width: 80,  sort: true,  flex: false },
+  { key: "Category",        width: 130, sort: true,  flex: false },
+  { key: "Source",          width: 85,  sort: true,  flex: false },
+  { key: "Signal Analysis", width: 240, sort: true,  flex: true  },
+  { key: "Strength",        width: 80,  sort: true,  flex: false },
+  { key: "Source Text",     width: 280, sort: false, flex: true  },
 ];
 
 const SORT_OPTIONS = COLS.filter((c) => c.sort);
 
 // Signal Analysis expands to fill extra horizontal space; all others are fixed
 const GRID = COLS.map((c) => c.flex ? `minmax(${c.width}px, 1fr)` : `${c.width}px`).join(" ");
-const GAP  = "0 8px";
-const MIN_W = COLS.reduce((s, c) => s + c.width, 0) + (COLS.length - 1) * 8 + 40;
+const GAP  = "0 20px";
+const MIN_W = COLS.reduce((s, c) => s + c.width, 0) + (COLS.length - 1) * 20 + 40;
 
 // ── Sort dropdown ─────────────────────────────────────────────────────────────
 function SortDropdown({ sort, onSort }: { sort: SortState; onSort: (s: SortState) => void }) {
@@ -107,16 +107,20 @@ export default function AIOpportunityFeed() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
   const [sort, setSort]       = useState<SortState>({ col: "Date", dir: "desc" });
+  const [filterDistrict, setFilterDistrict] = useState<string[]>([]);
+  const [filterDomain,   setFilterDomain]   = useState<string[]>([]);
+  const [filterState,    setFilterState]    = useState<string[]>([]);
   const [filterCategory, setFilterCategory] = useState<string[]>([]);
   const [filterSource,   setFilterSource]   = useState<string[]>([]);
-  const [searchText,     setSearchText]     = useState("");
 
   // Clear local filters when the global Reset Filters button is pressed
   useEffect(() => {
     if (resetSignal === 0) return;
+    setFilterDistrict([]);
+    setFilterDomain([]);
+    setFilterState([]);
     setFilterCategory([]);
     setFilterSource([]);
-    setSearchText("");
     setSort({ col: "Date", dir: "desc" });
   }, [resetSignal]);
 
@@ -148,18 +152,22 @@ export default function AIOpportunityFeed() {
   const categoryOptions = [...new Set(rows.map((r) => String(r["Category"] ?? "")).filter(Boolean))].sort();
   const sourceOptions   = [...new Set(rows.map((r) => String(r["Source"]   ?? "")).filter(Boolean))].sort();
 
-  const q = searchText.trim().toLowerCase();
+  const districtOf = (r: Signal) => String(r["Organization"] ?? "");
+  const domainOf   = (r: Signal) => String((r["Domain"] as string) || extractDomain(r["Source Link"] as string) || "");
+  const stateOf    = (r: Signal) => String(r["State"] ?? "");
+
+  const searchOptions = (get: (r: Signal) => string) => (query: string): Promise<string[]> => {
+    const ql = query.trim().toLowerCase();
+    const opts = [...new Set(rows.map(get).filter(Boolean))].sort();
+    return Promise.resolve((ql ? opts.filter((o) => o.toLowerCase().includes(ql)) : opts).slice(0, 200));
+  };
+
   const filtered = rows.filter((r) => {
     if (filterCategory.length && !filterCategory.includes((r["Category"] as string) ?? "")) return false;
     if (filterSource.length   && !filterSource.includes((r["Source"] as string) ?? ""))     return false;
-    if (q) {
-      const haystack = [
-        r["Keywords"], r["Organization"], r["State"], r["Campaign #"],
-        r["Source"], r["Category"],
-        extractDomain(r["Source Link"] as string),
-      ].map((v) => String(v ?? "").toLowerCase()).join(" ");
-      if (!haystack.includes(q)) return false;
-    }
+    if (filterDistrict.length && !filterDistrict.includes(districtOf(r))) return false;
+    if (filterDomain.length   && !filterDomain.includes(domainOf(r)))     return false;
+    if (filterState.length    && !filterState.includes(stateOf(r)))       return false;
     return true;
   });
 
@@ -187,19 +195,9 @@ export default function AIOpportunityFeed() {
         <DashboardHeader />
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-lg bg-white">
-              <Search size={13} className="text-gray-400 shrink-0" />
-              <input
-                type="text"
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-                placeholder="Search district, state…"
-                className="text-xs text-gray-700 bg-transparent border-none outline-none w-44 placeholder-gray-400"
-              />
-              {searchText && (
-                <button onClick={() => setSearchText("")} className="text-gray-300 hover:text-gray-500 ml-0.5 text-xs leading-none">✕</button>
-              )}
-            </div>
+            <MultiSelectDropdown label="District" value={filterDistrict} onChange={setFilterDistrict} search={searchOptions(districtOf)} />
+            <MultiSelectDropdown label="Domain"   value={filterDomain}   onChange={setFilterDomain}   search={searchOptions(domainOf)} />
+            <MultiSelectDropdown label="State"    value={filterState}    onChange={setFilterState}    search={searchOptions(stateOf)} minWidth={110} />
             <MultiSelectDropdown label="Category" value={filterCategory} onChange={setFilterCategory} options={categoryOptions} />
             <MultiSelectDropdown label="Source"   value={filterSource}   onChange={setFilterSource}   options={sourceOptions} />
           </div>
@@ -221,7 +219,7 @@ export default function AIOpportunityFeed() {
                 onClick={() => exportToCsv("ai-signals", csvCols as never, csvRows as never)}
                 className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white transition-colors"
               >
-                <Download size={13} /> Export CSV
+                <Download size={13} /> Export
               </button>
             )}
           </div>
@@ -238,8 +236,8 @@ export default function AIOpportunityFeed() {
             <div className="border border-t-0 border-gray-200 rounded-b-xl shadow-sm bg-white">
               {/* Column headers */}
               <div
-                className="sticky z-10 bg-white border-b border-gray-200 grid text-xs font-semibold"
-                style={{ top: titleBarHeight, color: "#111827", gridTemplateColumns: GRID, gap: GAP, padding: "10px 20px" }}
+                className="sticky z-10 bg-white border-b border-gray-200 grid font-semibold"
+                style={{ fontSize: 10, top: titleBarHeight, color: "#374151", gridTemplateColumns: GRID, gap: GAP, padding: "10px 20px" }}
               >
                 {COLS.map((c) => (
                   <span
@@ -277,7 +275,7 @@ export default function AIOpportunityFeed() {
                       </div>
 
                       {/* Domain */}
-                      <div className="text-xs text-gray-600 leading-snug pt-0.5 truncate">
+                      <div className="text-xs text-gray-600 leading-snug pt-0.5 break-all">
                         {domain || "—"}
                       </div>
 
@@ -302,7 +300,7 @@ export default function AIOpportunityFeed() {
                           <a href={link} target="_blank" rel="noopener noreferrer"
                             className="inline-flex items-center gap-0.5 text-blue-600 hover:text-blue-800 transition-colors"
                             title={link}>
-                            <span className="truncate max-w-[72px] inline-block">{domain}</span>
+                            <span className="max-w-[72px] inline-block break-all">{domain}</span>
                             <ExternalLink size={10} className="shrink-0" />
                           </a>
                         ) : "—"}
@@ -319,7 +317,7 @@ export default function AIOpportunityFeed() {
                       </div>
 
                       {/* Source */}
-                      <div className="text-xs text-gray-600 leading-snug pt-0.5 truncate">
+                      <div className="text-xs text-gray-600 leading-snug pt-0.5" style={{ overflowWrap: "anywhere", minWidth: 0 }}>
                         {(row["Source"] as string) || "—"}
                       </div>
 

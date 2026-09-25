@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { cachedJson } from "@/lib/apiCache";
+import { CAMPAIGNS } from "@/lib/campaigns";
 
 export const maxDuration = 60;
 
@@ -121,12 +122,17 @@ export async function GET(req: NextRequest) {
   const dateStart = searchParams.get("dateStart") ?? "";
   const dateEnd   = searchParams.get("dateEnd")   ?? "";
 
-  if (campaigns.length <= 1) {
-    const result = await fetchContentForCampaign(campaigns[0] ?? "", dateStart, dateEnd);
+  // When no campaign is selected, sum all completed campaigns individually.
+  // Querying Metabase cards without a campaign filter does not return all-campaign totals.
+  // No campaign selected → all ASSA ABLOY campaigns (unlike RAS, we don't exclude the newest).
+  const effectiveCampaigns = campaigns.length > 0 ? campaigns : [...CAMPAIGNS];
+
+  if (effectiveCampaigns.length === 1) {
+    const result = await fetchContentForCampaign(effectiveCampaigns[0], dateStart, dateEnd);
     return cachedJson(result);
   }
 
-  const perCampaign = await Promise.all(campaigns.map((c) => fetchContentForCampaign(c, dateStart, dateEnd)));
+  const perCampaign = await Promise.all(effectiveCampaigns.map((c) => fetchContentForCampaign(c, dateStart, dateEnd)));
   return cachedJson({
     impressions:      sum(perCampaign.map((r) => r.impressions)),
     clicks:           sum(perCampaign.map((r) => r.clicks)),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useLayoutEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useLayoutEffect, useState, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Loader2, ArrowUp, ArrowDown, ArrowUpDown, Download, Info, X } from "lucide-react";
 import DashboardHeader from "@/components/DashboardHeader";
@@ -14,21 +14,20 @@ function fetchFieldOptions(field: "district" | "state") {
       .then((d) => d.values ?? []);
 }
 
+// ASSA ABLOY's actual topic taxonomy (distinct Topic values in card 548).
 const TOPICS = [
-  "After-School Care Programs",
-  "Back-up Child Care",
-  "Bright Horizons Family Solutions Inc. (BFAM)",
-  "Care for Kids",
-  "Child Care",
-  "Child Care Subsidy Programs",
-  "Contract Renewal",
-  "Early Childhood Education",
-  "Request For Proposal (RFP)",
-  "Social Learning",
-  "Social and Emotional Learning",
-  "Student Support Services",
-  "Supervised Learning",
-  "Third-Party Vendors",
+  "Access Control",
+  "Active Shooter Preparedness",
+  "Building Security",
+  "Emergency Management",
+  "Emergency Response",
+  "Government Grants",
+  "Intercom",
+  "Interior Renovation",
+  "Locks & Locksmiths",
+  "Physical Security",
+  "Security Threats",
+  "Sustainability",
 ];
 
 // ─── Data types (used by table and chart) ─────────────────────────────────────
@@ -114,9 +113,18 @@ function AvgTopicScoreChart({ rows, topicCol, scoreCol, loading }: {
 // ─── Definitions modal ────────────────────────────────────────────────────────
 
 const DEFINITIONS = [
-  { term: "Bombora Intent Signals", def: "Based on topics that districts are researching. Bombora detects intent when a district shows a pattern of increased content consumption compared to its baseline." },
-  { term: "Topic Score", def: "The average score of a district's total engagement with a topic." },
-  { term: "Score Ranges", def: "Low: 1–35 · Moderate: 36–65 · High: ≥66" },
+  { term: "Filtering",          def: "Use the filters at the top of the page to filter by Campaign, Date Range, District, Domain, or State." },
+  { term: "Reset",              def: "To reset filters, click the Reset Filters button at the top right of the page." },
+  { term: "Sorting",            def: "Sort the table by clicking any column header or using the Sort By menu at the top right of the page." },
+  { term: "Export",             def: "Use Export All at the top of the page to export data from all dashboard views. Use Export within an individual dashboard view to export data from that view only." },
+  { term: "Intel",              def: "Account Intelligence signals including School Board Minutes, RFPs/Bids, Grants/Bonds, Strategic Initiatives, Leadership Changes, and District News. See the Account Intelligence dashboard for details." },
+  { term: "Topic",              def: "Reading Behavior signals indicating above-baseline content consumption on relevant topics. See the Topic Insights dashboard for details." },
+  { term: "Engagements",        def: "Total engagement activity, including ad clicks, email opens, and asset downloads." },
+  { term: "Engaged Users",      def: "Unique users who engaged with your content or campaign." },
+  { term: "Leads",              def: "Unique content downloads by target personas." },
+  { term: "Total Downloads",    def: "Total content assets downloaded by contacts." },
+  { term: "Intent Score",       def: "A numerical score reflecting a district's overall level of buying activity based on Account Intelligence, Reading Behavior, and engagement signals." },
+  { term: "Intent Score Trend", def: "Change in Intent Score compared with the prior campaign, indicating whether account activity has increased or decreased." },
 ];
 
 function DefinitionsModal({ onClose }: { onClose: () => void }) {
@@ -135,7 +143,7 @@ function DefinitionsModal({ onClose }: { onClose: () => void }) {
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "#111" }}>Metric Descriptions</span>
+          <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "#111" }}>Dashboard Guide</span>
           <button type="button" onClick={onClose} style={{ color: "#9ca3af", cursor: "pointer", background: "none", border: "none", padding: 0 }}>
             <X size={16} />
           </button>
@@ -161,7 +169,10 @@ interface SortState { col: number; dir: SortDir }
 
 const SORT_COLUMNS = [
   { label: "District", index: 0 },
+  { label: "Domain", index: 1 },
   { label: "State", index: 3 },
+  { label: "Campaign", index: 2 },
+  { label: "Date", index: 6 },
   { label: "Topic", index: 4 },
   { label: "Topic Score", index: 5 },
 ];
@@ -182,10 +193,10 @@ function SortDropdown({ sort, onSort }: { sort: SortState; onSort: (s: SortState
   return (
     <div ref={ref} className="relative">
       <button onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm hover:border-blue-400 transition-colors">
+        className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-white hover:border-blue-400 transition-colors">
         <ArrowUpDown size={13} className="text-gray-400" />
-        <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Sort by:</span>
-        <span className="text-blue-600 font-medium">{current?.label ?? "Topic Score"}</span>
+        <span className="text-gray-400 text-[13px] font-bold uppercase tracking-wider">Sort by:</span>
+        <span className="text-blue-600 font-semibold text-[13px]">{current?.label ?? "Topic Score"}</span>
         <span className="text-gray-400 text-xs">{sort.dir === "asc" ? "↑" : "↓"}</span>
         <ChevronDown size={13} className="text-gray-400 shrink-0" />
       </button>
@@ -210,10 +221,23 @@ function SortDropdown({ sort, onSort }: { sort: SortState; onSort: (s: SortState
 
 // ─── Data table ───────────────────────────────────────────────────────────────
 
-function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
-  cols: Col[]; rows: Row[];
+// Raw: 0=District 1=Domain 2=Campaign 3=State 4=Topic 5=Topic Score 6=Date
+// Visual: # | District | Domain | State | Campaign | Date | Topic | Topic Score
+const TI_COLS = [
+  { label: "#",           width: 32,  align: "center" as const, colIdx: -1 },
+  { label: "District",    width: 380, align: "left"   as const, colIdx: 0  },
+  { label: "Domain",      width: 230, align: "left"   as const, colIdx: 1  },
+  { label: "State",       width: 52,  align: "center" as const, colIdx: 3  },
+  { label: "Campaign",    width: 90,  align: "center" as const, colIdx: 2  },
+  { label: "Date",        width: 90,  align: "center" as const, colIdx: 6  },
+  { label: "Topic",       width: 260, align: "center" as const, colIdx: 4  },
+  { label: "Topic Score", width: 110,  align: "center" as const, colIdx: 5  },
+];
+const TI_GRID = TI_COLS.map(c => `${c.width}px`).join(" ");
+
+function DataTable({ rows, sort, onSort }: {
+  rows: Row[];
   sort: SortState; onSort: (s: SortState) => void;
-  headerTop?: number;
 }) {
   if (rows.length === 0) {
     return <div className="flex items-center justify-center h-64 text-gray-400 text-sm">No results</div>;
@@ -228,63 +252,28 @@ function DataTable({ cols, rows, sort, onSort, headerTop = 0 }: {
     return sort.dir === "asc" ? cmp : -cmp;
   });
 
-  // col order: #, District, Domain, State, Campaign, Date, Topic, Topic Score
-  const COL_WIDTHS = ["2%", "26%", "13%", "5%", "11%", "8%", "23%", "12%"];
-
   return (
     <div className="bg-white">
-      <table className="text-xs border-collapse" style={{ tableLayout: "fixed", width: "100%", minWidth: 950 }}>
-        <colgroup>
-          {COL_WIDTHS.map((w, i) => <col key={i} style={{ width: w }} />)}
-        </colgroup>
-        <thead>
-          <tr className="border-b border-gray-200">
-            <th className="sticky z-10 bg-white px-2 py-2 text-center font-bold border-b border-gray-200" style={{ color: "#111827", top: headerTop }}>#</th>
-            {COL_ORDER.map((j) => {
-              const col = cols[j];
-              if (!col) return null;
-              const isLeft = LEFT_ALIGN_COLS.has(col.display_name) && !FORCE_CENTER_COLS.has(col.display_name);
-              const active = sort.col === j;
-              return (
-                <th key={j}
-                  onClick={() => onSort({ col: j, dir: active && sort.dir === "desc" ? "asc" : "desc" })}
-                  style={{ color: "#111827", textAlign: isLeft ? "left" : "center", top: headerTop }}
-                  className="sticky z-10 bg-white px-2 py-2 font-bold leading-tight cursor-pointer select-none hover:opacity-70 border-b border-gray-200">
-                  <span className={`inline-flex items-center gap-1 ${isLeft ? "justify-start" : "justify-center"}`}>
-                    {HEADER_LABELS[col.display_name] ?? col.display_name}
-                    {active ? (sort.dir === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />) : <ArrowUpDown size={11} className="opacity-30" />}
-                  </span>
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((row, i) => (
-            <tr key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-              <td className="px-2 py-1.5 text-center text-gray-400">{i + 1}</td>
-              {COL_ORDER.map((j) => {
-                const cell = row[j];
-                const isNum = NUMBER_TYPES.has(cols[j]?.base_type);
-                const colName = cols[j]?.display_name ?? "";
-                const isLeft = LEFT_ALIGN_COLS.has(colName) && !FORCE_CENTER_COLS.has(colName);
-                const text = cell === null || cell === undefined ? "" : String(cell);
-                return (
-                  <td key={j}
-                    style={{ textAlign: isLeft ? "left" : "center" }}
-                    className={`px-2 py-1.5 ${isNum ? "tabular-nums" : ""} text-gray-800`}>
-                    {colName === "District" ? (
-                      <div className="whitespace-normal break-words leading-snug">{text}</div>
-                    ) : (
-                      <div className="truncate" title={text}>{text}</div>
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {sorted.map((row, i) => (
+        <div key={i} className="border-b border-gray-100 hover:bg-gray-50 transition-colors text-xs"
+             style={{ display: "grid", gridTemplateColumns: TI_GRID }}>
+          <span className="px-2 py-1.5 text-center text-gray-400 font-medium">{i + 1}</span>
+          {TI_COLS.slice(1).map((cd) => {
+            const j = cd.colIdx;
+            const cell = row[j];
+            const text = cell === null || cell === undefined ? "" : String(cell);
+            return (
+              <span key={j} className="px-2 py-1.5 text-gray-800"
+                    style={cd.label === "Domain"
+                      ? { textAlign: cd.align, overflowWrap: "anywhere" }
+                      : { textAlign: cd.align, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}
+                    title={text}>
+                {text}
+              </span>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
@@ -338,11 +327,29 @@ function TopicInsightsContent() {
   const { campaign, dateStart, dateEnd, resetSignal } = useFilter();
 
   const [filterDistrict, setFilterDistrict] = useState<string[]>([]);
+  const [filterDomain, setFilterDomain] = useState<string[]>([]);
   const [filterState, setFilterState] = useState<string[]>([]);
   const [filterTopic, setFilterTopic] = useState<string[]>([]);
+  const [filterCampaign, setFilterCampaign] = useState<string[]>([]);
+  const [filterDate, setFilterDate] = useState<string[]>([]);
 
   const [cols, setCols] = useState<Col[]>([]);
-  const [rows, setRows] = useState<Row[]>([]);
+  const [allRows, setAllRows] = useState<Row[]>([]);
+  const rows = useMemo(() => allRows.filter((r) => {
+    if (filterDomain.length   && !filterDomain.includes(String(r[1] ?? "")))   return false;
+    if (filterCampaign.length && !filterCampaign.includes(String(r[2] ?? ""))) return false;
+    if (filterDate.length     && !filterDate.includes(String(r[6] ?? "")))     return false;
+    return true;
+  }), [allRows, filterDomain, filterCampaign, filterDate]);
+
+  const makeSearch = (colIdx: number) => (query: string): Promise<string[]> => {
+    const ql = query.trim().toLowerCase();
+    const opts = [...new Set(allRows.map((r) => String(r[colIdx] ?? "")).filter(Boolean))].sort();
+    return Promise.resolve((ql ? opts.filter((o) => o.toLowerCase().includes(ql)) : opts).slice(0, 200));
+  };
+  const searchDomains   = makeSearch(1);
+  const searchCampaigns = makeSearch(2);
+  const searchDates     = makeSearch(6);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sort, setSort] = useState<SortState>({ col: 5, dir: "desc" });
@@ -377,7 +384,7 @@ function TopicInsightsContent() {
       .then((d) => {
         if (d.error) throw new Error(d.error);
         setCols(d.cols);
-        setRows(d.rows);
+        setAllRows(d.rows);
         setLoading(false);
       })
       .catch((err) => { setError(err.message ?? "Failed to load"); setLoading(false); });
@@ -388,8 +395,11 @@ function TopicInsightsContent() {
   useEffect(() => {
     if (resetSignal === 0) return;
     setFilterDistrict([]);
+    setFilterDomain([]);
     setFilterState([]);
     setFilterTopic([]);
+    setFilterCampaign([]);
+    setFilterDate([]);
   }, [resetSignal]);
 
   return (
@@ -399,10 +409,13 @@ function TopicInsightsContent() {
         <DashboardHeader />
 
         {/* Filter + sort row */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+          <div className="flex items-center gap-2 flex-wrap">
             <MultiSelectDropdown label="District" value={filterDistrict} onChange={setFilterDistrict} search={fetchFieldOptions("district")} />
+            <MultiSelectDropdown label="Domain"   value={filterDomain}   onChange={setFilterDomain}   search={searchDomains} />
             <MultiSelectDropdown label="State"    value={filterState}    onChange={setFilterState}    search={fetchFieldOptions("state")} />
+            <MultiSelectDropdown label="Campaign" value={filterCampaign} onChange={setFilterCampaign} search={searchCampaigns} />
+            <MultiSelectDropdown label="Date"     value={filterDate}     onChange={setFilterDate}     search={searchDates} />
             <MultiSelectDropdown label="Topic"    value={filterTopic}    onChange={setFilterTopic}    options={TOPICS} />
             <button
               type="button"
@@ -410,7 +423,7 @@ function TopicInsightsContent() {
               className="flex items-center gap-1.5 px-3 py-2 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 rounded-lg bg-white transition-colors shrink-0"
             >
               <Info size={13} />
-              Metric Descriptions
+              Dashboard Guide
             </button>
           </div>
           <SortDropdown sort={sort} onSort={setSort} />
@@ -420,7 +433,7 @@ function TopicInsightsContent() {
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", WebkitOverflowScrolling: "touch", padding: "0 24px 24px" }}>
-        <div style={{ minWidth: 950, width: "100%" }}>
+        <div style={{ minWidth: 1240, width: "100%" }}>
 
         {/* AVG Topic Score chart — driven by the same filtered rows as the table */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-4 overflow-hidden" style={{ height: 340 }}>
@@ -456,7 +469,7 @@ function TopicInsightsContent() {
               }}
               className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white transition-colors"
             >
-              <Download size={13} /> Export CSV
+              <Download size={13} /> Export
             </button>
           )}
         </div>
@@ -466,9 +479,24 @@ function TopicInsightsContent() {
           <div className="flex items-center justify-center h-64 text-red-500 text-sm bg-white border border-t-0 border-gray-200 rounded-b-xl">{error}</div>
         )}
         {!loading && !error && (
-          <div className="border border-t-0 border-gray-200 rounded-b-xl shadow-sm" style={{ clipPath: "inset(0 round 0 0 0.75rem 0.75rem)" }}>
-            <DataTable cols={cols} rows={rows} sort={sort} onSort={setSort} headerTop={titleBarHeight} />
-          </div>
+          <>
+            <div className="sticky z-10 bg-white border-b border-l border-r border-gray-200 text-[11px] font-semibold text-gray-700"
+                 style={{ top: titleBarHeight, display: "grid", gridTemplateColumns: TI_GRID }}>
+              {TI_COLS.map((cd, i) => (
+                <span key={i}
+                  className={`px-2 py-2 inline-flex items-center gap-0.5 whitespace-nowrap select-none ${cd.colIdx >= 0 ? "cursor-pointer hover:opacity-70" : ""} ${cd.align === "center" ? "justify-center" : "justify-start"}`}
+                  onClick={cd.colIdx >= 0 ? () => setSort({ col: cd.colIdx, dir: sort.col === cd.colIdx && sort.dir === "desc" ? "asc" : "desc" }) : undefined}>
+                  {cd.label}
+                  {cd.colIdx >= 0 && (sort.col === cd.colIdx
+                    ? (sort.dir === "asc" ? <ArrowUp size={10} className="shrink-0" /> : <ArrowDown size={10} className="shrink-0" />)
+                    : <ArrowUpDown size={10} className="opacity-30 shrink-0" />)}
+                </span>
+              ))}
+            </div>
+            <div className="border border-t-0 border-gray-200 rounded-b-xl shadow-sm" style={{ overflow: "clip" }}>
+              <DataTable rows={rows} sort={sort} onSort={setSort} />
+            </div>
+          </>
         )}
         </div>
       </div>

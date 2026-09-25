@@ -71,7 +71,7 @@ export default function DashboardHeader({ legend }: { legend?: string }) {
             className="font-bold text-gray-900 leading-tight"
             style={{ fontFamily: "'Lato', sans-serif", fontSize: "30px", letterSpacing: "-0.5px" }}
           >
-            ABMi
+            ABMxi
           </h1>
           <p className="mt-1 font-medium" style={{ fontSize: "12px", color: "#6b8cba" }}>
             {subtitle}
@@ -83,7 +83,7 @@ export default function DashboardHeader({ legend }: { legend?: string }) {
       {/* Global filters — Campaign + Date Range */}
       <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-2 flex-wrap">
         <MultiSelectDropdown
-          label="ABMi Campaign"
+          label="ABMxi Campaign"
           value={campaign}
           onChange={setCampaign}
           options={[...CAMPAIGNS]}
@@ -91,20 +91,17 @@ export default function DashboardHeader({ legend }: { legend?: string }) {
         />
         <div className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-lg bg-white">
           <CalendarSearch size={14} className="text-orange-400 shrink-0" />
-          <div className="relative">
-            {!dateStart && (
-              <span className="absolute inset-y-0 left-0 right-5 flex items-center bg-white text-xs text-gray-400 pointer-events-none">Start</span>
-            )}
+          <span className="text-gray-700 text-xs font-bold uppercase shrink-0">Date Range:</span>
+          <div className="relative flex items-center">
+            {!dateStart && <span className="absolute left-0 text-xs text-gray-400 pointer-events-none select-none">Start</span>}
             <input type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)}
-              className="text-xs text-gray-700 bg-transparent border-none outline-none w-[95px] cursor-pointer" />
+              className={`text-xs text-gray-700 bg-transparent border-none outline-none cursor-pointer ${dateStart ? "w-[95px]" : "w-[30px] opacity-0"}`} />
           </div>
-          <span className="text-gray-300 text-xs">–</span>
-          <div className="relative">
-            {!dateEnd && (
-              <span className="absolute inset-y-0 left-0 right-5 flex items-center bg-white text-xs text-gray-400 pointer-events-none">End</span>
-            )}
+          <span className="text-gray-400 text-xs">–</span>
+          <div className="relative flex items-center">
+            {!dateEnd && <span className="absolute left-0 text-xs text-gray-400 pointer-events-none select-none">End</span>}
             <input type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)}
-              className="text-xs text-gray-700 bg-transparent border-none outline-none w-[95px] cursor-pointer" />
+              className={`text-xs text-gray-700 bg-transparent border-none outline-none cursor-pointer ${dateEnd ? "w-[95px]" : "w-[28px] opacity-0"}`} />
           </div>
           {(dateStart || dateEnd) && (
             <button onClick={() => { setDateStart(""); setDateEnd(""); }} className="text-gray-300 hover:text-gray-500 ml-0.5">
@@ -129,7 +126,7 @@ export default function DashboardHeader({ legend }: { legend?: string }) {
           title="Export all table data to Excel"
         >
           {exporting ? <Loader2 size={13} className="animate-spin" /> : <FileSpreadsheet size={13} />}
-          {exporting ? "Exporting…" : "Export Excel"}
+          {exporting ? "Exporting…" : "Export"}
         </button>
         <button
           type="button"

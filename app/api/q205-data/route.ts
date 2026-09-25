@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { CAMPAIGNS } from "@/lib/campaigns";
 
 export const maxDuration = 60;
 
@@ -19,15 +20,20 @@ function sqlInList(values: string[]): string {
   return `(${values.map(sqlStr).join(", ")})`;
 }
 
-// Returns true when the URL resolves (2xx or 3xx before following). Uses a
-// 5-second timeout so broken/unreachable links don't stall the whole response.
+// In-memory cache so we only check each URL once per server instance lifetime.
+const reachabilityCache = new Map<string, boolean>();
+
 async function linkReachable(url: string): Promise<boolean> {
+  if (reachabilityCache.has(url)) return reachabilityCache.get(url)!;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5000);
   try {
     const r = await fetch(url, { method: "HEAD", redirect: "manual", signal: controller.signal });
-    return r.ok || (r.status >= 300 && r.status < 400);
+    const ok = r.ok || (r.status >= 300 && r.status < 400);
+    reachabilityCache.set(url, ok);
+    return ok;
   } catch {
+    reachabilityCache.set(url, false);
     return false;
   } finally {
     clearTimeout(timer);
@@ -37,11 +43,16 @@ async function linkReachable(url: string): Promise<boolean> {
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const campaigns = parseList(searchParams.get("campaign"));
+  const channels  = parseList(searchParams.get("channel"));
   const dateStart = searchParams.get("dateStart") ?? "";
   const dateEnd   = searchParams.get("dateEnd")   ?? "";
 
+  // When no campaign is selected, use all ASSA ABLOY campaigns.
+  const effectiveCampaigns = campaigns.length > 0 ? campaigns : [...CAMPAIGNS];
+
   const where: string[] = ["1=1"];
-  if (campaigns.length)     where.push(`Abmi_Campaign IN ${sqlInList(campaigns)}`);
+  where.push(`Abmi_Campaign IN ${sqlInList(effectiveCampaigns)}`);
+  if (channels.length) where.push(`Channel IN ${sqlInList(channels)}`);
   if (dateStart && dateEnd) where.push(`DATE(date) BETWEEN ${sqlStr(dateStart)} AND ${sqlStr(dateEnd)}`);
 
   const sql = `
@@ -49,13 +60,14 @@ SELECT
   DASH_Image_URL  AS Image,
   asset_name      AS \`Asset Name\`,
   URL             AS \`Asset Link\`,
-  Abmi_Campaign   AS Campaign,
+  STRING_AGG(DISTINCT Abmi_Campaign ORDER BY Abmi_Campaign) AS Campaign,
+  STRING_AGG(DISTINCT Channel       ORDER BY Channel)       AS Channel,
   SUM(impressions) AS Impressions,
   SUM(clicks)      AS Clicks,
   CONCAT(ROUND(SAFE_DIVIDE(SUM(clicks), SUM(impressions)) * 100, 2), '%') AS CTR
 FROM ${TABLE}
 WHERE ${where.join(" AND ")}
-GROUP BY asset_name, URL, DASH_Image_URL, Abmi_Campaign
+GROUP BY asset_name, URL, DASH_Image_URL
 ORDER BY Impressions DESC`;
 
   const res = await fetch(`${METABASE_URL}/api/dataset`, {

@@ -101,8 +101,8 @@ export default function MultiSelectDropdown(props: Props) {
         } ${open ? "ring-2 ring-blue-100 border-blue-300" : ""}`}
         style={{ minWidth }}
       >
-        <span className={`text-[11px] font-bold uppercase tracking-wider shrink-0 ${active ? "text-blue-400" : "text-gray-400"}`}>
-          {label}
+        <span className={`text-[13px] font-bold uppercase tracking-wider shrink-0 ${active ? "text-blue-400" : "text-gray-400"}`}>
+          {label.toUpperCase().replace("XI", "xi")}
         </span>
         <span className="flex-1 text-left truncate text-xs">
           {active

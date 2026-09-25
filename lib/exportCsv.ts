@@ -1,6 +1,19 @@
 type Col = { display_name: string };
 type Row = (string | number | null)[];
 
+const COL_NAME_MAP: Record<string, string> = {
+  "ST": "State",
+  "Camp": "Campaign",
+  "Camp.": "Campaign",
+  "Dist": "District",
+  "Dom": "Domain",
+  "Eng": "Engagements",
+};
+
+function friendlyName(name: string): string {
+  return COL_NAME_MAP[name] ?? name;
+}
+
 export function exportToCsv(filename: string, cols: Col[], rows: Row[]) {
   const escape = (v: string | number | null) => {
     if (v === null || v === undefined) return "";
@@ -9,7 +22,7 @@ export function exportToCsv(filename: string, cols: Col[], rows: Row[]) {
       ? `"${s.replace(/"/g, '""')}"` : s;
   };
 
-  const header = cols.map((c) => escape(c.display_name)).join(",");
+  const header = cols.map((c) => escape(friendlyName(c.display_name))).join(",");
   const body = rows.map((row) => row.map((cell) => escape(cell)).join(",")).join("\n");
   const csv = `${header}\n${body}`;
 

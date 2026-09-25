@@ -48,7 +48,7 @@ export function EcosystemFilterBar() {
     <div className="flex items-center gap-2 mb-2">
       {/* Campaign pill */}
       <MultiSelectDropdown
-        label="ABMi Campaign"
+        label="ABMxi Campaign"
         value={campaign}
         onChange={setCampaign}
         options={[...CAMPAIGNS]}
@@ -58,10 +58,10 @@ export function EcosystemFilterBar() {
       {/* Date range pill */}
       <div className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-lg bg-white">
         <CalendarSearch size={14} className="text-orange-400 shrink-0" />
-        <span className="text-gray-400 text-xs font-semibold uppercase tracking-wider shrink-0">Date Range:</span>
+        <span className="text-gray-700 text-xs font-bold uppercase shrink-0">Date Range:</span>
         <input type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)}
           className="text-xs text-gray-700 bg-transparent border-none outline-none w-[110px] cursor-pointer" />
-        <span className="text-gray-300 text-xs">–</span>
+        <span className="text-gray-400 text-xs">–</span>
         <input type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)}
           className="text-xs text-gray-700 bg-transparent border-none outline-none w-[110px] cursor-pointer" />
         {(dateStart || dateEnd) && (
@@ -121,13 +121,13 @@ export default function EcosystemFunnel() {
       value: fmt(data.engagements),
     },
     {
-      label: "Click-Through Rate (CTR)",
+      label: "Click-Through Rate",
       cardLabel: "CTR",
       description: "Percentage of impressions that generated a click",
       value: fmt(data.ctr),
     },
     {
-      label: "Unique Engaged Users (UEU)",
+      label: "Unique Engaged Users",
       cardLabel: "UEU",
       description: "Unique individuals who engaged",
       value: fmt(data.engagedUsers),
@@ -169,19 +169,15 @@ export default function EcosystemFunnel() {
               >
                 <h3
                   className="font-black text-gray-900 leading-none"
-                  style={{ fontSize: 16, letterSpacing: "-0.01em" }}
+                  style={{ fontSize: 19, letterSpacing: "-0.01em" }}
                 >
                   {stage.label}
                 </h3>
-                <p
-                  title={stage.description}
-                  className="text-gray-500 mt-0.5"
-                  style={{ fontSize: 10, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-                >
+                <p className="text-gray-500 mt-0.5 leading-snug" style={{ fontSize: 12 }}>
                   {stage.description}
                 </p>
                 {stage.goal && (
-                  <p className="font-semibold text-green-600 mt-0.5" style={{ fontSize: 10 }}>
+                  <p className="font-semibold text-green-600 mt-0.5" style={{ fontSize: 12 }}>
                     {stage.goal}
                   </p>
                 )}
@@ -201,13 +197,13 @@ export default function EcosystemFunnel() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <span
                     className="block uppercase tracking-widest text-gray-400 font-semibold"
-                    style={{ fontSize: 11, marginBottom: 2 }}
+                    style={{ fontSize: 13, marginBottom: 2 }}
                   >
                     {stage.cardLabel ?? stage.label}
                   </span>
                   <span
                     className="block font-black text-white tabular-nums"
-                    style={{ fontSize: 20, lineHeight: 1.1, letterSpacing: "-0.02em" }}
+                    style={{ fontSize: 24, lineHeight: 1.1, letterSpacing: "-0.02em" }}
                   >
                     {stage.value}
                   </span>
@@ -221,13 +217,13 @@ export default function EcosystemFunnel() {
                   >
                     <span
                       className="block uppercase tracking-widest text-gray-400 font-semibold"
-                      style={{ fontSize: 9, marginBottom: 2 }}
+                      style={{ fontSize: 11, marginBottom: 2 }}
                     >
                       % OF GOAL
                     </span>
                     <span
                       className="block font-black text-white tabular-nums"
-                      style={{ fontSize: 16, lineHeight: 1.1 }}
+                      style={{ fontSize: 19, lineHeight: 1.1 }}
                     >
                       {stage.goalValue}
                     </span>
@@ -239,17 +235,6 @@ export default function EcosystemFunnel() {
         })}
       </div>
 
-      {/* Funnel tip triangle */}
-      <div className="flex justify-end">
-        <div
-          className="bg-gray-950"
-          style={{
-            width: CARD_W,
-            height: 20,
-            clipPath: "polygon(15% 0, 85% 0, 50% 100%)",
-          }}
-        />
-      </div>
     </div>
   );
 }
