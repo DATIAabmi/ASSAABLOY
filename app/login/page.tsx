@@ -88,9 +88,9 @@ function LoginForm() {
             <Image
               src="/assaabloy-logo.png"
               alt="ASSA ABLOY"
-              width={300}
-              height={94}
-              style={{ height: 64, width: "auto", objectFit: "contain" }}
+              width={900}
+              height={124}
+              style={{ height: 34, width: "auto", objectFit: "contain" }}
             />
             <div style={{ height: 2, width: 48, background: "#ef4444", borderRadius: 2, marginTop: 14 }} />
             <p style={{ marginTop: 10, fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#6b7280" }}>

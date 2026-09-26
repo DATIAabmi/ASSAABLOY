@@ -56,9 +56,9 @@ export default function DashboardHeader({ legend }: { legend?: string }) {
           <Image
             src="/assaabloy-logo.png"
             alt="ASSA ABLOY"
-            width={300}
-            height={94}
-            style={{ height: "76px", width: "auto" }}
+            width={900}
+            height={124}
+            style={{ height: "36px", width: "auto" }}
             className="object-contain"
           />
           {/* Vertical divider */}
