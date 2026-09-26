@@ -61,8 +61,6 @@ export default function DashboardHeader({ legend }: { legend?: string }) {
             style={{ height: "36px", width: "auto" }}
             className="object-contain"
           />
-          {/* Vertical divider */}
-          <div className="self-stretch w-px bg-gray-200 shrink-0" />
         </div>
 
         {/* Center: truly centered between logo and right edge */}
