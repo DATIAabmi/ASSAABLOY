@@ -10,16 +10,19 @@ import {
 
 export const maxDuration = 300;
 
-// Export All: five independent datasets side by side on one sheet. Each
-// section has all of its individual-export columns, starting with its own
-// Organization | Domain | State | Campaign. Datasets are stacked, never joined —
-// a row fills only its own section's columns and leaves the rest blank.
+// Export All: one worksheet per dataset, each a normal flat table (its own
+// single set of columns, one row per record). Earlier this laid all five
+// datasets side by side on one sheet, which duplicated the Organization |
+// Domain | State | Campaign columns once per section and — since sections
+// have very different row counts — left most of the sheet looking empty
+// below whichever section ran out of rows first. Separate sheets keep every
+// row's columns lined up with that row's own district, with no duplication.
 
 interface SectionSpec {
   title: string;
   columns: ExportColumn<never>[];
   load: (f: ExportFilters) => Promise<unknown[]>;
-  fill: string; // ARGB tint for the section's title and header cells
+  fill: string; // ARGB tint for the sheet's header row
 }
 
 const SECTIONS: SectionSpec[] = [
@@ -75,70 +78,39 @@ function exportFilename(campaigns: string[]): string {
 
 // ── Workbook ─────────────────────────────────────────────────────────────────
 
-async function buildWorkbook(sections: { spec: SectionSpec; rows: unknown[] }[]): Promise<Buffer> {
-  const wb = new ExcelJS.Workbook();
-  wb.creator = "DATIA ABMxi";
-  wb.created = new Date();
-  const ws = wb.addWorksheet("Account & Engagement Data", {
-    views: [{ state: "frozen", ySplit: 2 }],
-  });
+const formatFor = (col: ExportColumn<never>) => {
+  if (col.kind === "date") return "yyyy-mm-dd";
+  if (col.kind === "number") return "#,##0.##";
+  return undefined;
+};
 
-  // Column layout: each section's full column set, side by side in order.
-  const layout = sections.map(({ spec }) => spec.columns);
-  const starts: number[] = [];
-  let next = 1;
-  for (const own of layout) { starts.push(next); next += own.length; }
-  const totalCols = next - 1;
+function buildSheet(wb: ExcelJS.Workbook, spec: SectionSpec, rows: unknown[]) {
+  const ws = wb.addWorksheet(spec.title, { views: [{ state: "frozen", ySplit: 1 }] });
+  const cols = spec.columns;
 
-  // Row 1 — section titles, each merged across its own columns.
-  const titleRow = ws.getRow(1);
-  sections.forEach(({ spec }, i) => {
-    const from = starts[i];
-    const to = starts[i] + layout[i].length - 1;
-    titleRow.getCell(from).value = spec.title;
-    if (to > from) ws.mergeCells(1, from, 1, to);
-    for (let c = from; c <= to; c++) {
-      titleRow.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: spec.fill } };
-    }
-    titleRow.getCell(from).font = { bold: true, size: 12 };
-    titleRow.getCell(from).alignment = { horizontal: "center", vertical: "middle" };
-  });
-  titleRow.height = 20;
-
-  // Row 2 — column headers.
-  const headerRow = ws.getRow(2);
-  sections.forEach(({ spec }, i) => {
-    layout[i].forEach((c, j) => { headerRow.getCell(starts[i] + j).value = c.header; });
-    for (let c = starts[i]; c < starts[i] + layout[i].length; c++) {
-      headerRow.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: spec.fill } };
-    }
+  // Row 1 — column headers. Every column is defined exactly once on this
+  // sheet, so Organization | Domain | State | Campaign appear a single time
+  // (as the sheet's leading columns), not once per dataset.
+  const headerRow = ws.getRow(1);
+  cols.forEach((c, j) => {
+    const cell = headerRow.getCell(j + 1);
+    cell.value = c.header;
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: spec.fill } };
+    cell.border = { bottom: { style: "thin", color: { argb: "FF9CA3AF" } } };
   });
   headerRow.font = { bold: true };
   headerRow.alignment = { vertical: "middle", wrapText: true };
-  for (let c = 1; c <= totalCols; c++) {
-    headerRow.getCell(c).border = { bottom: { style: "thin", color: { argb: "FF9CA3AF" } } };
+  headerRow.height = 20;
+
+  // Data — every row on this sheet belongs to this dataset, so its
+  // Organization/Domain/State/Campaign columns always match that same row.
+  for (const row of rows as never[]) {
+    const values = cols.map((c) => toCell(c.value(row), c.kind));
+    ws.addRow(values);
   }
 
-  // Data — each section's rows in turn; only its own columns are filled.
-  // Cells are written one row at a time so no second copy of the data is built.
-  let r = 3;
-  sections.forEach(({ rows }, i) => {
-    const own = layout[i];
-    for (const row of rows as never[]) {
-      const values: ExcelJS.CellValue[] = new Array(totalCols).fill(null);
-      own.forEach((c, j) => { values[starts[i] - 1 + j] = toCell(c.value(row), c.kind); });
-      ws.getRow(r++).values = values;
-    }
-  });
-
   // Formats and widths per column.
-  const formatFor = (col: ExportColumn<never>) => {
-    if (col.kind === "date") return "yyyy-mm-dd";
-    if (col.kind === "number") return "#,##0.##";
-    return undefined;
-  };
-  const allCols = layout.flat();
-  allCols.forEach((col, j) => {
+  cols.forEach((col, j) => {
     const column = ws.getColumn(j + 1);
     const fmt = formatFor(col);
     if (fmt) column.numFmt = fmt;
@@ -146,8 +118,14 @@ async function buildWorkbook(sections: { spec: SectionSpec; rows: unknown[] }[])
     column.width = long ? 40 : col.kind === "url" ? 36 : Math.max(12, col.header.length + 4);
     if (col.kind === "url") column.font = { color: { argb: "FF1D4ED8" }, underline: true };
   });
-  // Header rows keep their own font over the link styling.
-  headerRow.font = { bold: true };
+}
+
+async function buildWorkbook(sections: { spec: SectionSpec; rows: unknown[] }[]): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "DATIA ABMxi";
+  wb.created = new Date();
+
+  for (const { spec, rows } of sections) buildSheet(wb, spec, rows);
 
   const out = await wb.xlsx.writeBuffer();
   return Buffer.from(out as ArrayBuffer);
