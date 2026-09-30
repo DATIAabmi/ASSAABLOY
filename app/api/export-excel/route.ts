@@ -1,160 +1,203 @@
 import { NextRequest, NextResponse } from "next/server";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
+import {
+  ACCOUNT_INTELLIGENCE_EXPORT, ENGAGED_USERS_EXPORT, LEADS_EXPORT, PERSONA_EXPORT, TOPIC_EXPORT,
+  campaignCode, type ExportColumn,
+} from "@/lib/exportColumns";
+import {
+  loadAccountIntelligence, loadEngagedUsers, loadLeads, loadPersona, loadTopic, type ExportFilters,
+} from "@/lib/exportDatasets";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
-const METABASE_URL = process.env.NEXT_PUBLIC_METABASE_URL!;
-const API_KEY      = process.env.METABASE_ADMIN_API_KEY!;
+// Export All: five independent datasets side by side on one sheet. Each
+// section has all of its individual-export columns, starting with its own
+// Organization | Domain | State | Campaign. Datasets are stacked, never joined —
+// a row fills only its own section's columns and leaves the rest blank.
+
+interface SectionSpec {
+  title: string;
+  columns: ExportColumn<never>[];
+  load: (f: ExportFilters) => Promise<unknown[]>;
+  fill: string; // ARGB tint for the section's title and header cells
+}
+
+const SECTIONS: SectionSpec[] = [
+  { title: "Engaged Users by Organization", columns: ENGAGED_USERS_EXPORT as ExportColumn<never>[],        load: loadEngagedUsers,        fill: "FFDBEAFE" },
+  { title: "Account Intelligence",      columns: ACCOUNT_INTELLIGENCE_EXPORT as ExportColumn<never>[], load: loadAccountIntelligence, fill: "FFDCFCE7" },
+  { title: "Persona Insights",          columns: PERSONA_EXPORT as ExportColumn<never>[],              load: loadPersona,             fill: "FFFEF3C7" },
+  { title: "Topic Insights",            columns: TOPIC_EXPORT as ExportColumn<never>[],                load: loadTopic,               fill: "FFF3E8FF" },
+  { title: "Lead Insights",             columns: LEADS_EXPORT as ExportColumn<never>[],                load: loadLeads,               fill: "FFFFE4E6" },
+];
 
 function parseList(v: string | null): string[] {
   return (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 }
 
-// ── Metabase helpers ────────────────────────────────────────────────────────
+// ── Cell values ──────────────────────────────────────────────────────────────
 
-async function queryCard(cardId: number, parameters: object[] = []) {
-  const res = await fetch(`${METABASE_URL}/api/card/${cardId}/query`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
-    body: JSON.stringify({ parameters }),
-    cache: "no-store",
-  });
-  if (!res.ok) return { cols: [], rows: [] };
-  const data = await res.json();
-  const cols: string[] = (data.data?.cols ?? []).map((c: { display_name: string }) => c.display_name);
-  const rows: unknown[][] = data.data?.rows ?? [];
-  return { cols, rows };
+// Characters XML 1.0 forbids — they make Excel report the file as corrupt.
+const INVALID_XML = /[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g;
+const MAX_CELL_CHARS = 32_767;
+
+function cleanText(v: unknown): string {
+  return String(v).replace(INVALID_XML, "").slice(0, MAX_CELL_CHARS);
 }
 
-async function queryCardJson(cardId: number, parameters: object[] = []) {
-  const res = await fetch(`${METABASE_URL}/api/card/${cardId}/query/json`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
-    body: JSON.stringify({ parameters }),
-    cache: "no-store",
-  });
-  if (!res.ok) return { cols: [], rows: [] };
-  const data: Record<string, unknown>[] = await res.json();
-  if (!data.length) return { cols: [], rows: [] };
-  const cols = Object.keys(data[0]);
-  const rows = data.map((r) => cols.map((c) => r[c]));
-  return { cols, rows };
-}
-
-// ── Parameter builders ───────────────────────────────────────────────────────
-
-function campaignParam(campaigns: string[]) {
-  if (!campaigns.length) return [];
-  return [{ id: "campaign", type: "string/=", value: campaigns, target: ["variable", ["template-tag", "Abmi_Campaign"]] }];
-}
-
-function campaignAndDate(campaigns: string[], dateStart: string, dateEnd: string) {
-  const p: object[] = campaignParam(campaigns);
-  if (dateStart && dateEnd) p.push({
-    id: "date",
-    type: "date/range",
-    value: `${dateStart}~${dateEnd}`,
-    target: ["dimension", ["template-tag", "Date"]],
-  });
-  return p;
-}
-
-// ── Section builder ──────────────────────────────────────────────────────────
-
-type Section = { title: string; cols: string[]; rows: unknown[][] };
-
-function buildRows(sections: Section[]): unknown[][] {
-  const out: unknown[][] = [];
-  for (const s of sections) {
-    if (!s.rows.length) continue;
-    out.push([]);                    // blank separator
-    out.push([s.title]);             // section title
-    out.push(s.cols);                // column headers
-    for (const row of s.rows) out.push(row);
+function toCell(v: unknown, kind: ExportColumn<never>["kind"]): ExcelJS.CellValue {
+  if (v === null || v === undefined || v === "") return null;
+  if (kind === "number") {
+    const n = typeof v === "number" ? v : Number(v);
+    return Number.isFinite(n) ? n : cleanText(v);
   }
-  // trim leading blank row
-  if (out.length && (out[0] as unknown[]).length === 0) out.shift();
-  return out;
+  if (kind === "date") {
+    const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : cleanText(v);
+  }
+  if (kind === "url") {
+    const url = String(v).trim();
+    return /^https?:\/\//i.test(url) ? { text: cleanText(url), hyperlink: url } : cleanText(url);
+  }
+  return typeof v === "number" ? v : cleanText(v);
 }
 
-// ── Main handler ─────────────────────────────────────────────────────────────
-// Card ids point at the ASSA ABLOY collection's clones of Right At School's
-// export-excel cards: 405->537, 425->538, 168->539, 169->540, 174->541,
-// 179->546, 181->548, 205->554, 203->552. Card 432 has no working ASSA ABLOY
-// clone yet (its source table's schema changed — see account-intelligence
-// route), so this uses card 695 (Account Intelligence) as that section
-// instead, which didn't exist in the original RAS export.
+// ── Filename ─────────────────────────────────────────────────────────────────
+
+function exportFilename(campaigns: string[]): string {
+  const codes = campaigns.map(campaignCode).filter(Boolean);
+  const label =
+    codes.length === 0 ? "All-Campaigns"
+    : codes.length <= 3 ? codes.join("-")
+    : `${codes.length}-Campaigns`;
+  const stamp = new Date().toISOString().slice(0, 10);
+  return `ABMxi_Export_All_${label}_${stamp}.xlsx`;
+}
+
+// ── Workbook ─────────────────────────────────────────────────────────────────
+
+async function buildWorkbook(sections: { spec: SectionSpec; rows: unknown[] }[]): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "DATIA ABMxi";
+  wb.created = new Date();
+  const ws = wb.addWorksheet("Account & Engagement Data", {
+    views: [{ state: "frozen", ySplit: 2 }],
+  });
+
+  // Column layout: each section's full column set, side by side in order.
+  const layout = sections.map(({ spec }) => spec.columns);
+  const starts: number[] = [];
+  let next = 1;
+  for (const own of layout) { starts.push(next); next += own.length; }
+  const totalCols = next - 1;
+
+  // Row 1 — section titles, each merged across its own columns.
+  const titleRow = ws.getRow(1);
+  sections.forEach(({ spec }, i) => {
+    const from = starts[i];
+    const to = starts[i] + layout[i].length - 1;
+    titleRow.getCell(from).value = spec.title;
+    if (to > from) ws.mergeCells(1, from, 1, to);
+    for (let c = from; c <= to; c++) {
+      titleRow.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: spec.fill } };
+    }
+    titleRow.getCell(from).font = { bold: true, size: 12 };
+    titleRow.getCell(from).alignment = { horizontal: "center", vertical: "middle" };
+  });
+  titleRow.height = 20;
+
+  // Row 2 — column headers.
+  const headerRow = ws.getRow(2);
+  sections.forEach(({ spec }, i) => {
+    layout[i].forEach((c, j) => { headerRow.getCell(starts[i] + j).value = c.header; });
+    for (let c = starts[i]; c < starts[i] + layout[i].length; c++) {
+      headerRow.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: spec.fill } };
+    }
+  });
+  headerRow.font = { bold: true };
+  headerRow.alignment = { vertical: "middle", wrapText: true };
+  for (let c = 1; c <= totalCols; c++) {
+    headerRow.getCell(c).border = { bottom: { style: "thin", color: { argb: "FF9CA3AF" } } };
+  }
+
+  // Data — each section's rows in turn; only its own columns are filled.
+  // Cells are written one row at a time so no second copy of the data is built.
+  let r = 3;
+  sections.forEach(({ rows }, i) => {
+    const own = layout[i];
+    for (const row of rows as never[]) {
+      const values: ExcelJS.CellValue[] = new Array(totalCols).fill(null);
+      own.forEach((c, j) => { values[starts[i] - 1 + j] = toCell(c.value(row), c.kind); });
+      ws.getRow(r++).values = values;
+    }
+  });
+
+  // Formats and widths per column.
+  const formatFor = (col: ExportColumn<never>) => {
+    if (col.kind === "date") return "yyyy-mm-dd";
+    if (col.kind === "number") return "#,##0.##";
+    return undefined;
+  };
+  const allCols = layout.flat();
+  allCols.forEach((col, j) => {
+    const column = ws.getColumn(j + 1);
+    const fmt = formatFor(col);
+    if (fmt) column.numFmt = fmt;
+    const long = ["Signal Analysis", "Source Text", "Keywords", "Organization"].includes(col.header);
+    column.width = long ? 40 : col.kind === "url" ? 36 : Math.max(12, col.header.length + 4);
+    if (col.kind === "url") column.font = { color: { argb: "FF1D4ED8" }, underline: true };
+  });
+  // Header rows keep their own font over the link styling.
+  headerRow.font = { bold: true };
+
+  const out = await wb.xlsx.writeBuffer();
+  return Buffer.from(out as ArrayBuffer);
+}
+
+// ── Handler ──────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  const sp        = req.nextUrl.searchParams;
-  const campaigns = parseList(sp.get("campaign"));
-  const dateStart = sp.get("dateStart") ?? "";
-  const dateEnd   = sp.get("dateEnd")   ?? "";
+  const sp = req.nextUrl.searchParams;
+  const filters: ExportFilters = {
+    campaigns: parseList(sp.get("campaign")),
+    dateStart: sp.get("dateStart") ?? "",
+    dateEnd:   sp.get("dateEnd")   ?? "",
+  };
 
-  const p   = campaignAndDate(campaigns, dateStart, dateEnd);
-  const cp  = campaignParam(campaigns);
+  const results = await Promise.allSettled(SECTIONS.map((s) => s.load(filters)));
+  const failed = SECTIONS
+    .map((s, i) => ({ title: s.title, result: results[i] }))
+    .filter((x): x is { title: string; result: PromiseRejectedResult } => x.result.status === "rejected");
 
-  // Fetch all table data in parallel
-  const [
-    engagedUsers,
-    sbm,
-    persona,
-    geo,
-    leadsTable,
-    leadsContent,
-    topicTable,
-    contentEngaged,
-    channelBreakdown,
-    accountIntelligence,
-  ] = await Promise.all([
-    queryCard(537, p),
-    queryCard(538, cp),
-    queryCard(539, p),
-    queryCard(540, p),
-    queryCard(541, p),
-    queryCard(546, p),
-    queryCard(548, p),
-    queryCard(554, p),
-    queryCard(552, p),
-    queryCardJson(695),
-  ]);
+  // Never hand back a workbook that's silently missing a dataset.
+  if (failed.length) {
+    const names = failed.map((f) => f.title);
+    console.error("Export All failed:", failed.map((f) => `${f.title}: ${String(f.result.reason)}`).join(" | "));
+    return NextResponse.json(
+      { error: `Export failed for ${names.join(", ")}. Please try again.`, failed: names },
+      { status: 502 },
+    );
+  }
 
-  const sections: Section[] = [
-    { title: "ENGAGED USERS BY DISTRICT",   ...engagedUsers },
-    { title: "SCHOOL BOARD MINUTES",         ...sbm          },
-    { title: "PERSONA INSIGHTS",             ...persona      },
-    { title: "GEO INSIGHTS",                 ...geo          },
-    { title: "LEADS BY DISTRICT",            ...leadsTable   },
-    { title: "LEADS BY CONTENT NAME",        ...leadsContent },
-    { title: "TOPIC INSIGHTS",               ...topicTable   },
-    { title: "CONTENT ENGAGEMENTS",          ...contentEngaged },
-    { title: "CHANNEL BREAKDOWN",            ...channelBreakdown },
-    { title: "ACCOUNT INTELLIGENCE",         ...accountIntelligence },
-  ];
+  const sections = SECTIONS.map((spec, i) => ({
+    spec,
+    rows: (results[i] as PromiseFulfilledResult<unknown[]>).value,
+  }));
 
-  const allRows = buildRows(sections);
-
-  const ws = XLSX.utils.aoa_to_sheet(allRows);
-
-  // Column widths — reasonable defaults
-  ws["!cols"] = Array.from({ length: 20 }, () => ({ wch: 24 }));
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Dashboard Export");
-
-  const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
-
-  const now    = new Date();
-  const stamp  = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
-  const client = campaigns.length === 1 ? campaigns[0].replace(/[^a-z0-9]/gi, "-") : "all-campaigns";
-  const filename = `assaabloy-${client}-${stamp}.xlsx`;
-
-  return new NextResponse(buf, {
-    status: 200,
-    headers: {
-      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-      "Cache-Control": "no-store",
-    },
-  });
+  try {
+    const buf = await buildWorkbook(sections);
+    const counts = sections.map((s) => `${s.spec.title}=${s.rows.length}`).join("; ");
+    return new NextResponse(new Uint8Array(buf), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${exportFilename(filters.campaigns)}"`,
+        "Cache-Control": "no-store",
+        // Row counts per dataset, for checking against each tab.
+        "X-Export-Counts": counts,
+      },
+    });
+  } catch (err) {
+    console.error("Export All: building workbook failed:", err);
+    return NextResponse.json({ error: "Export failed while building the workbook. Please try again." }, { status: 500 });
+  }
 }

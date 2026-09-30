@@ -4,6 +4,7 @@ import Image from "next/image";
 import { CalendarSearch, X, RotateCcw, LogOut, FileSpreadsheet, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { downloadBlob } from "@/lib/downloadBlob";
 import { useFilter } from "@/components/FilterContext";
 import { CAMPAIGNS, campaignDateRange } from "@/lib/campaigns";
 import MultiSelectDropdown from "@/components/MultiSelectDropdown";
@@ -12,6 +13,7 @@ export default function DashboardHeader({ legend }: { legend?: string }) {
   const { campaign, setCampaign, dateStart, dateEnd, setDateStart, setDateEnd, resetAll } = useFilter();
   const router = useRouter();
   const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
 
   async function handleSignOut() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -21,21 +23,24 @@ export default function DashboardHeader({ legend }: { legend?: string }) {
 
   async function handleExport() {
     setExporting(true);
+    setExportError("");
     try {
       const params = new URLSearchParams();
       if (campaign.length) params.set("campaign", campaign.join(","));
       if (dateStart) params.set("dateStart", dateStart);
       if (dateEnd)   params.set("dateEnd",   dateEnd);
       const res  = await fetch(`/api/export-excel?${params.toString()}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setExportError(body?.error ?? "Export failed. Please try again.");
+        return;
+      }
       const blob = await res.blob();
       const cd   = res.headers.get("Content-Disposition") ?? "";
-      const name = cd.match(/filename="([^"]+)"/)?.[1] ?? "assaabloy-export.xlsx";
-      const a    = Object.assign(document.createElement("a"), {
-        href: URL.createObjectURL(blob),
-        download: name,
-      });
-      a.click();
-      URL.revokeObjectURL(a.href);
+      const name = cd.match(/filename="([^"]+)"/)?.[1] ?? "ABMxi_Export_All.xlsx";
+      downloadBlob(blob, name);
+    } catch {
+      setExportError("Export failed — could not reach the server. Please try again.");
     } finally {
       setExporting(false);
     }
@@ -121,10 +126,10 @@ export default function DashboardHeader({ legend }: { legend?: string }) {
           onClick={handleExport}
           disabled={exporting}
           className="flex items-center gap-1.5 px-3 py-2 text-xs text-emerald-700 hover:text-emerald-900 border border-emerald-300 hover:border-emerald-500 rounded-lg bg-white transition-colors shrink-0 disabled:opacity-60 disabled:cursor-wait"
-          title="Export all table data to Excel"
+          title="Export Engaged Users, Account Intelligence, Persona, Topic and Lead Insights for the selected campaign(s) to one Excel workbook"
         >
           {exporting ? <Loader2 size={13} className="animate-spin" /> : <FileSpreadsheet size={13} />}
-          {exporting ? "Exporting…" : "Export"}
+          {exporting ? "Exporting…" : "Export All"}
         </button>
         <button
           type="button"
@@ -136,6 +141,10 @@ export default function DashboardHeader({ legend }: { legend?: string }) {
           Sign out
         </button>
       </div>
+
+      {exportError && (
+        <p role="alert" className="mt-2 text-right text-xs text-red-600">{exportError}</p>
+      )}
 
       {legend && (
         <div className="mt-3 flex flex-wrap gap-x-6 gap-y-0.5" style={{ fontFamily: "'Lato', sans-serif" }}>
