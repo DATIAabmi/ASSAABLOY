@@ -101,25 +101,7 @@ ORDER BY Engagements DESC`;
 
 export const AI_SIGNALS_SQL = `SELECT * FROM ${AI_SIGNALS_TABLE} WHERE CAST(\`Client ID\` AS STRING) = '${AI_SIGNALS_CLIENT_ID}'`;
 
-// ── Lead Insights ────────────────────────────────────────────────────────────
-
-/** District → SBM ("Y"/"N"), shown as the Intel column. */
-export function sbmByDistrictSql(campaigns: string[]): string {
-  const where = ["topic_district IS NOT NULL", "topic_district != ''"];
-  if (campaigns.length) {
-    // Match the full-label column (abmi_campaign) — abm_campaign only holds
-    // the short code ("C1"), which can't LIKE-match a full campaign label.
-    const likeExprs = campaigns.map((c) => `LOWER(abmi_campaign) LIKE LOWER('%${c.replace(/'/g, "''")}%')`);
-    where.push(`(${likeExprs.join(" OR ")})`);
-  }
-  return `
-SELECT
-  topic_district,
-  IF(MAX(CASE WHEN SBM_Y_N = 'Y' THEN 1 ELSE 0 END) = 1, 'Y', 'N') AS SBM
-FROM ${SCORING_TABLE}
-WHERE ${where.join(" AND ")}
-GROUP BY topic_district`;
-}
+// ── Leads Insights ───────────────────────────────────────────────────────────
 
 // Values are passed without manual quoting — Metabase auto-quotes string/=
 // template tag values on substitution, so manual quotes cause double-quoting.

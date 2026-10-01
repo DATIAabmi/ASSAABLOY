@@ -126,7 +126,7 @@ export default function DashboardHeader({ legend }: { legend?: string }) {
           onClick={handleExport}
           disabled={exporting}
           className="flex items-center gap-1.5 px-3 py-2 text-xs text-emerald-700 hover:text-emerald-900 border border-emerald-300 hover:border-emerald-500 rounded-lg bg-white transition-colors shrink-0 disabled:opacity-60 disabled:cursor-wait"
-          title="Export Engaged Users, Account Intelligence, Persona, Topic and Lead Insights for the selected campaign(s) to one Excel workbook"
+          title="Export Engaged Users, Account Intelligence, Persona, Topic and Leads Insights for the selected campaign(s) to one Excel workbook"
         >
           {exporting ? <Loader2 size={13} className="animate-spin" /> : <FileSpreadsheet size={13} />}
           {exporting ? "Exporting…" : "Export All"}

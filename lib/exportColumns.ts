@@ -40,7 +40,7 @@ export const ENGAGED_USERS_EXPORT: ExportColumn<ArrayRow>[] = [
   { header: "Leads",           value: at(8),  kind: "number" },
   { header: "Total Downloads", value: at(9),  kind: "number" },
   { header: "Intent Score",    value: at(10), kind: "number" },
-  { header: "Score Trend",     value: at(11), kind: "number" },
+  { header: "Intent Score Trend", value: at(11), kind: "number" },
 ];
 
 // Row shape (ai-signals-data): one object per signal, keyed by ai_signals column.
@@ -82,13 +82,12 @@ export const TOPIC_EXPORT: ExportColumn<ArrayRow>[] = [
   { header: "Topic Score", value: at(5), kind: "number" },
 ];
 
-// Row shape (q174-data): District, Domain, Campaign, State, Job Function, Total Downloads, Intel
+// Row shape (q174-data): District, Domain, Campaign, State, Job Function, Total Downloads
 export const LEADS_EXPORT: ExportColumn<ArrayRow>[] = [
   { header: "Organization",        value: at(0) },
   { header: "Domain",          value: at(1) },
   { header: "State",           value: at(3) },
   { header: "Campaign",        value: at(2) },
-  { header: "Intel",           value: at(6) },
   { header: "Job Function",    value: at(4) },
   { header: "Total Downloads", value: at(5), kind: "number" },
 ];

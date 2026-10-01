@@ -5,7 +5,7 @@
 import {
   AI_SIGNALS_DB_ID, AI_SIGNALS_SQL, LEADS_CARD_ID, SCORING_DB_ID, TOPIC_CARD_ID,
   engagedUsersSql, leadsCardParams, personaSql, queryCardAll, queryNativeAll,
-  sbmByDistrictSql, topicCardParams,
+  topicCardParams,
 } from "@/lib/metabaseQueries";
 import { campaignCode } from "@/lib/exportColumns";
 
@@ -58,18 +58,14 @@ export async function loadTopic(f: ExportFilters): Promise<Row[]> {
     .filter((r) => keep(r[2]));
 }
 
-/** Lead Insights — card 541 once per campaign, plus the district SBM (Intel) lookup. */
+/** Leads Insights — card 541 once per campaign. No Intel/SBM column: that's a
+ *  district-level lookup from the scoring table, not data card 541 itself has. */
 export async function loadLeads(f: ExportFilters): Promise<Row[]> {
   const campaignList = f.campaigns.length ? f.campaigns : [""];
-  const [perCampaign, sbmRows] = await Promise.all([
-    Promise.all(campaignList.map(async (c) => {
-      const rows = await queryCardAll(LEADS_CARD_ID, leadsCardParams(c, f.dateStart, f.dateEnd));
-      const campaignVal = c ? campaignCode(c) : "All";
-      return rows.map((o) => [o["District"], o["Domain"], campaignVal, o["State"], o["Job_Function"], o["Total_Downloads"]]);
-    })),
-    queryNativeAll(SCORING_DB_ID, sbmByDistrictSql(f.campaigns)),
-  ]);
-
-  const sbm = new Map(sbmRows.map((r) => [String(r["topic_district"] ?? "").toLowerCase(), String(r["SBM"] ?? "N")]));
-  return perCampaign.flat().map((r) => [...r, sbm.get(String(r[0] ?? "").toLowerCase()) ?? "N"]);
+  const perCampaign = await Promise.all(campaignList.map(async (c) => {
+    const rows = await queryCardAll(LEADS_CARD_ID, leadsCardParams(c, f.dateStart, f.dateEnd));
+    const campaignVal = c ? campaignCode(c) : "All";
+    return rows.map((o) => [o["District"], o["Domain"], campaignVal, o["State"], o["Job_Function"], o["Total_Downloads"]]);
+  }));
+  return perCampaign.flat();
 }

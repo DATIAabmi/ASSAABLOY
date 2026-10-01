@@ -31,7 +31,7 @@ const SECTIONS: SectionSpec[] = [
   { title: "Account Intelligence",      columns: ACCOUNT_INTELLIGENCE_EXPORT as ExportColumn<never>[], load: loadAccountIntelligence, fill: "FFDCFCE7" },
   { title: "Persona Insights",          columns: PERSONA_EXPORT as ExportColumn<never>[],              load: loadPersona,             fill: "FFFEF3C7" },
   { title: "Topic Insights",            columns: TOPIC_EXPORT as ExportColumn<never>[],                load: loadTopic,               fill: "FFF3E8FF" },
-  { title: "Lead Insights",             columns: LEADS_EXPORT as ExportColumn<never>[],                load: loadLeads,               fill: "FFFFE4E6" },
+  { title: "Leads Insights",            columns: LEADS_EXPORT as ExportColumn<never>[],                load: loadLeads,               fill: "FFFFE4E6" },
 ];
 
 function parseList(v: string | null): string[] {
@@ -112,7 +112,7 @@ const MASTER_FIELDS: { spec: SectionSpec; fields: FieldConfig[] }[] = [
       { sourceHeader: "Leads",           outHeader: "Leads (Engaged Users)",           agg: "sum", kind: "number" },
       { sourceHeader: "Total Downloads", outHeader: "Total Downloads (Engaged Users)", agg: "sum", kind: "number" },
       { sourceHeader: "Intent Score",    outHeader: "Intent Score",                    agg: "sum", kind: "number" },
-      { sourceHeader: "Score Trend",     outHeader: "Score Trend",                     agg: "sum", kind: "number" },
+      { sourceHeader: "Intent Score Trend", outHeader: "Intent Score Trend",           agg: "sum", kind: "number" },
     ],
   },
   {
@@ -146,11 +146,10 @@ const MASTER_FIELDS: { spec: SectionSpec; fields: FieldConfig[] }[] = [
     ],
   },
   {
-    spec: SECTIONS[4], // Lead Insights
+    spec: SECTIONS[4], // Leads Insights
     fields: [
-      { sourceHeader: "Intel",           outHeader: "Intel",                          agg: "or" },
-      { sourceHeader: "Job Function",    outHeader: "Job Function (Lead Insights)",   agg: "join" },
-      { sourceHeader: "Total Downloads", outHeader: "Total Downloads (Lead Insights)", agg: "sum", kind: "number" },
+      { sourceHeader: "Job Function",    outHeader: "Job Function (Leads Insights)",   agg: "join" },
+      { sourceHeader: "Total Downloads", outHeader: "Total Downloads (Leads Insights)", agg: "sum", kind: "number" },
     ],
   },
 ];
@@ -268,7 +267,7 @@ function buildMasterRows(sections: { spec: SectionSpec; rows: unknown[] }[]): {
 
 const formatFor = (kind: ExportKind | undefined) => {
   if (kind === "date") return "yyyy-mm-dd";
-  if (kind === "number") return "#,##0.##";
+  if (kind === "number") return "#,##0";
   return undefined;
 };
 
@@ -303,7 +302,7 @@ function writeSheet(
   // Formats and widths per column.
   const longHeaders = new Set([
     "Signal Analysis", "Source Text", "Keywords", "Organization", "Category",
-    "Job Function (Persona)", "Job Function (Lead Insights)", "Topic (Topic Insights)",
+    "Job Function (Persona)", "Job Function (Leads Insights)", "Topic (Topic Insights)",
   ]);
   columns.forEach((col, j) => {
     const column = ws.getColumn(j + 1);
