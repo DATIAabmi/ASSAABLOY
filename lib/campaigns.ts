@@ -1,7 +1,15 @@
 /** Ordered newest → oldest. Sourced from ASSA ABLOY's actual campaign values
  *  (distinct abmi_campaign in prod_cbl_assaabloy_202602_scoring) — do not
- *  reuse Right At School's C1-C7 labels/dates here, they're a different schedule. */
+ *  reuse Right At School's C1-C7 labels/dates here, they're a different schedule.
+ *
+ *  C5's date range is inferred, not confirmed: the scoring table (Engaged
+ *  Users/Persona/Topic/Leads/funnel data) has no "C5" rows yet, only Account
+ *  Intelligence's ai_signals table tags its 12095 signals "C5" (dated
+ *  2026-07-01 to 2026-09-21) — the same "data exists before the label is
+ *  official" gap C3/C4 had before ad_performance caught up to them. Confirm
+ *  the real label with ASSA ABLOY once it's assigned. */
 export const CAMPAIGNS = [
+  "C5: September 2026",
   "C4: August 2026",
   "C3: July 2026",
   "C2: May 2026-June 2026",
@@ -25,7 +33,7 @@ interface Goals {
 
 // Per-campaign impression/lead goals — campaigns run for different lengths
 // of time so a single fixed goal doesn't apply across all of them.
-// TODO: confirm real goals for ASSA ABLOY's C1-C4; every campaign currently
+// TODO: confirm real goals for ASSA ABLOY's C1-C5; every campaign currently
 // falls back to DEFAULT_GOALS below until goals are provided.
 const CAMPAIGN_GOALS: Record<string, Goals> = {};
 
