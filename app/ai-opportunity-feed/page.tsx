@@ -104,7 +104,7 @@ function getRowValue(row: Signal, colKey: string): unknown {
 }
 
 export default function AIOpportunityFeed() {
-  const { resetSignal } = useFilter();
+  const { campaign, resetSignal } = useFilter();
   const [rows, setRows]       = useState<Signal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
@@ -167,7 +167,12 @@ export default function AIOpportunityFeed() {
     return Promise.resolve((ql ? opts.filter((o) => o.toLowerCase().includes(ql)) : opts).slice(0, 200));
   };
 
+  // Global ABMxi Campaign filter (header dropdown) — full labels ("C5: September
+  // 2026") reduced to the short code signals are actually tagged with ("C5").
+  const campaignCodes = campaign.map((c) => c.split(":")[0].trim());
+
   const filtered = rows.filter((r) => {
+    if (campaignCodes.length && !campaignCodes.includes(String(r["Campaign #"] ?? ""))) return false;
     if (filterCategory.length && !filterCategory.includes((r["Category"] as string) ?? "")) return false;
     if (filterSource.length   && !filterSource.includes((r["Source"] as string) ?? ""))     return false;
     if (filterMarket.length   && !filterMarket.includes(String(r["Market"] ?? "")))          return false;

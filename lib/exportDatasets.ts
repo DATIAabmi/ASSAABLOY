@@ -30,14 +30,13 @@ export async function loadEngagedUsers(f: ExportFilters): Promise<Row[]> {
   return rows.map(pick(["District", "Domain", "ST", "Camp", "SBM", "Topic", "Engagements", "EngagedUser", "UniqueLeads", "Down", "Intent Score", "Score Trend"]));
 }
 
-/**
- * Account Intelligence — every ai_signals row for the client. Like the tab,
- * this ignores the Campaign filter: signals are tagged with their own
- * campaign (currently all "C5"), which doesn't line up with the scoring
- * table's C1–C4.
- */
-export async function loadAccountIntelligence(): Promise<Record<string, unknown>[]> {
-  return queryNativeAll(AI_SIGNALS_DB_ID, AI_SIGNALS_SQL);
+/** Account Intelligence — every ai_signals row for the client, campaign
+ *  filtered by code like the tab does (signals are tagged with their own
+ *  "Campaign #", currently all "C5"). */
+export async function loadAccountIntelligence(f: ExportFilters): Promise<Record<string, unknown>[]> {
+  const rows = await queryNativeAll(AI_SIGNALS_DB_ID, AI_SIGNALS_SQL);
+  const keep = inCampaigns(f.campaigns);
+  return rows.filter((r) => keep(r["Campaign #"]));
 }
 
 /** Persona Insights — date in SQL, campaign filtered by code like the tab does. */
