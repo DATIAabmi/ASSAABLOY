@@ -204,8 +204,14 @@ function mergeField(rec: MasterRecord, field: FieldConfig, raw: unknown) {
   }
 }
 
+interface MasterColumn {
+  header: string;
+  kind?: ExportKind;
+  fill?: string; // header tint of the tab this column came from
+}
+
 function buildMasterRows(sections: { spec: SectionSpec; rows: unknown[] }[]): {
-  columns: { header: string; kind?: ExportKind }[];
+  columns: MasterColumn[];
   rows: unknown[][];
 } {
   const rowsByTitle = new Map(sections.map((s) => [s.spec.title, s.rows]));
@@ -243,9 +249,11 @@ function buildMasterRows(sections: { spec: SectionSpec; rows: unknown[] }[]): {
     }
   }
 
-  const columns: { header: string; kind?: ExportKind }[] = [
+  // Each field's header takes the fill of the tab it came from, so the Master
+  // sheet reads as the five tabs side by side. Identifier columns stay gray.
+  const columns: MasterColumn[] = [
     { header: "Organization" }, { header: "Domain" }, { header: "State" }, { header: "Campaign" },
-    ...MASTER_FIELDS.flatMap((m) => m.fields.map((f) => ({ header: f.outHeader, kind: f.kind }))),
+    ...MASTER_FIELDS.flatMap((m) => m.fields.map((f) => ({ header: f.outHeader, kind: f.kind, fill: m.spec.fill }))),
   ];
 
   const rows: unknown[][] = [...records.values()]
@@ -275,7 +283,7 @@ function writeSheet(
   wb: ExcelJS.Workbook,
   title: string,
   fill: string,
-  columns: { header: string; kind?: ExportKind }[],
+  columns: MasterColumn[],
   rows: unknown[][],
 ) {
   const ws = wb.addWorksheet(title, { views: [{ state: "frozen", ySplit: 1 }] });
@@ -286,7 +294,7 @@ function writeSheet(
   columns.forEach((c, j) => {
     const cell = headerRow.getCell(j + 1);
     cell.value = c.header;
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: c.fill ?? fill } };
     cell.border = { bottom: { style: "thin", color: { argb: "FF9CA3AF" } } };
   });
   headerRow.font = { bold: true };
