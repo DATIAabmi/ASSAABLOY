@@ -58,6 +58,28 @@ GROUP BY topic_district, email_domain
 ORDER BY \`Intent Score\` DESC`;
 }
 
+// ── Geo Insights (matches card 169) ──────────────────────────────────────────
+
+export function geoInsightsSql(f: { campaigns: string[]; dateStart?: string; dateEnd?: string }): string {
+  const where: string[] = [
+    "SAFE_CAST(engagements AS FLOAT64) != 0",
+    "state IS NOT NULL", "state != 'cState'", "state != ''",
+  ];
+  if (f.campaigns.length) where.push(`abm_campaign IN ${sqlInList(f.campaigns.map(campaignCode))}`);
+  if (f.dateStart && f.dateEnd) where.push(`DATE(date_max_for_intent_scoring) BETWEEN ${sqlStr(f.dateStart)} AND ${sqlStr(f.dateEnd)}`);
+
+  return `
+SELECT
+  State,
+  SUM(SAFE_CAST(engagements AS FLOAT64)) AS Engagements,
+  COUNT(DISTINCT engaged_user) AS \`Engaged Users\`,
+  COUNT(DISTINCT leads) AS Leads
+FROM ${SCORING_TABLE}
+WHERE ${where.join("\n  AND ")}
+GROUP BY State
+ORDER BY Engagements DESC`;
+}
+
 // ── Persona Insights (matches card 168) ──────────────────────────────────────
 
 export function personaSql(f: {

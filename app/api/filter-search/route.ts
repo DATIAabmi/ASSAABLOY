@@ -53,13 +53,21 @@ export async function GET(req: NextRequest) {
   const col = FIELD_MAP[field];
   if (!col) return NextResponse.json({ values: [] });
 
+  // Optional state constraint for district lookups
+  const stateParam = searchParams.get("state") ?? "";
+  const stateValues = stateParam ? stateParam.split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean) : [];
+  const stateClause = stateValues.length
+    ? `AND state IN (${stateValues.map((s) => `"${s}"`).join(",")})`
+    : "";
+
   // A real search term gets a much higher cap so "select all shown" in the
   // UI doesn't silently miss matches past the limit — an empty query (just
   // browsing on open) stays capped low since that list is only a preview.
   const limit = q ? 1000 : 50;
-  const sql = q
-    ? `SELECT DISTINCT ${col} FROM ${TABLE} WHERE LOWER(${col}) LIKE LOWER("%${q.replace(/"/g, "")}%") AND ${col} IS NOT NULL AND ${col} != "" ORDER BY ${col} LIMIT ${limit}`
-    : `SELECT DISTINCT ${col} FROM ${TABLE} WHERE ${col} IS NOT NULL AND ${col} != "" ORDER BY ${col} LIMIT ${limit}`;
+  const safeQ = q.replace(/"/g, "");
+  const sql = safeQ
+    ? `SELECT DISTINCT ${col} FROM ${TABLE} WHERE LOWER(${col}) LIKE LOWER("%${safeQ}%") AND ${col} IS NOT NULL AND ${col} != "" ${stateClause} ORDER BY ${col} LIMIT ${limit}`
+    : `SELECT DISTINCT ${col} FROM ${TABLE} WHERE ${col} IS NOT NULL AND ${col} != "" ${stateClause} ORDER BY ${col} LIMIT ${limit}`;
 
   const res = await fetch(`${METABASE_URL}/api/dataset`, {
     method: "POST",

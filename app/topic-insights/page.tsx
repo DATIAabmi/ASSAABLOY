@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useLayoutEffect, useState, useCallback, useMemo } from "react";
+import React, { useRef, useEffect, useLayoutEffect, useState, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Loader2, ArrowUp, ArrowDown, ArrowUpDown, Download, Info, X } from "lucide-react";
 import DashboardHeader from "@/components/DashboardHeader";
@@ -87,7 +87,7 @@ function AvgTopicScoreChart({ rows, topicCol, scoreCol, loading }: {
 
   return (
     <div className="p-4 h-full overflow-y-auto">
-      <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">Avg Topic Score by Topic</p>
+      <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">Average Score by Topic</p>
       <div className="flex flex-col gap-1.5">
         {sorted.map(([topic, score], i) => (
           <div key={i} className="flex items-center gap-3">
@@ -112,19 +112,13 @@ function AvgTopicScoreChart({ rows, topicCol, scoreCol, loading }: {
 
 // ─── Definitions modal ────────────────────────────────────────────────────────
 
-const DEFINITIONS = [
-  { term: "Filtering",          def: "Use the filters at the top of the page to filter by Campaign, Date Range, District, Domain, or State." },
-  { term: "Reset",              def: "To reset filters, click the Reset Filters button at the top right of the page." },
-  { term: "Sorting",            def: "Sort the table by clicking any column header or using the Sort By menu at the top right of the page." },
-  { term: "Export",             def: "Use Export All at the top of the page to export data from all dashboard views. Use Export within an individual dashboard view to export data from that view only." },
-  { term: "Intel",              def: "Account Intelligence signals including School Board Minutes, RFPs/Bids, Grants/Bonds, Strategic Initiatives, Leadership Changes, and District News. See the Account Intelligence dashboard for details." },
-  { term: "Topic",              def: "Reading Behavior signals indicating above-baseline content consumption on relevant topics. See the Topic Insights dashboard for details." },
-  { term: "Engagements",        def: "Total engagement activity, including ad clicks, email opens, and asset downloads." },
-  { term: "Engaged Users",      def: "Unique users who engaged with your content or campaign." },
-  { term: "Leads",              def: "Unique content downloads by target personas." },
-  { term: "Total Downloads",    def: "Total content assets downloaded by contacts." },
-  { term: "Intent Score",       def: "A numerical score reflecting a district's overall level of buying activity based on Account Intelligence, Reading Behavior, and engagement signals." },
-  { term: "Intent Score Trend", def: "Change in Intent Score compared with the prior campaign, indicating whether account activity has increased or decreased." },
+const DEFINITIONS: { term: string; def: React.ReactNode }[] = [
+  { term: "Filter",       def: "Filter by Campaign, Date Range, Organization, Domain, State, Date, or Topic." },
+  { term: "Reset",        def: <>Click <strong>Reset Filters</strong> to clear all selected filters.</> },
+  { term: "Sort",         def: <>Sort the table by clicking any column header or using the <strong>Sort By</strong> menu.</> },
+  { term: "Export",       def: <>Use <strong>Export All</strong> to export data from all dashboard views. Use <strong>Export</strong> within an individual dashboard to export data from that view only.</> },
+  { term: "Topic",        def: "A topic selected for monitoring based on the campaign and solution focus. Bombora intent signals are based on topics that organizations are researching." },
+  { term: "Topic Score",  def: "Average score of an organization's total engagement with a topic. Bombora detects intent when a district shows a pattern of increased content consumption compared to its baseline. Low: 1≥35, Moderate: 36≥65, High: ≥66" },
 ];
 
 function DefinitionsModal({ onClose }: { onClose: () => void }) {
@@ -139,7 +133,7 @@ function DefinitionsModal({ onClose }: { onClose: () => void }) {
     >
       <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)" }} onMouseDown={onClose} />
       <div
-        style={{ position: "relative", background: "#fff", borderRadius: 16, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", border: "1px solid #f0f0f0", padding: 24, maxWidth: 460, width: "calc(100% - 32px)" }}
+        style={{ position: "relative", background: "#fff", borderRadius: 16, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", border: "1px solid #f0f0f0", padding: 24, maxWidth: 520, width: "calc(100% - 32px)" }}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -151,7 +145,7 @@ function DefinitionsModal({ onClose }: { onClose: () => void }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {DEFINITIONS.map(({ term, def }) => (
             <div key={term} style={{ display: "flex", gap: 12 }}>
-              <span style={{ fontWeight: 700, fontSize: 12, color: "#111", flexShrink: 0, minWidth: 110, paddingTop: 1 }}>{term}</span>
+              <span className="font-bold" style={{ fontSize: 12, color: "#111", flexShrink: 0, minWidth: 140, paddingTop: 1 }}>{term}</span>
               <span style={{ fontSize: 12, color: "#4b5563", lineHeight: 1.6 }}>{def}</span>
             </div>
           ))}
@@ -224,14 +218,14 @@ function SortDropdown({ sort, onSort }: { sort: SortState; onSort: (s: SortState
 // Raw: 0=District 1=Domain 2=Campaign 3=State 4=Topic 5=Topic Score 6=Date
 // Visual: # | District | Domain | State | Campaign | Date | Topic | Topic Score
 const TI_COLS = [
-  { label: "#",           width: 32,  align: "center" as const, colIdx: -1 },
-  { label: "District",    width: 380, align: "left"   as const, colIdx: 0  },
-  { label: "Domain",      width: 230, align: "left"   as const, colIdx: 1  },
+  { label: "#",           width: 64,  align: "center" as const, colIdx: -1 },
+  { label: "District",    width: 440, align: "left"   as const, colIdx: 0  },
+  { label: "Domain",      width: 200, align: "left"   as const, colIdx: 1  },
   { label: "State",       width: 52,  align: "center" as const, colIdx: 3  },
   { label: "Campaign",    width: 90,  align: "center" as const, colIdx: 2  },
   { label: "Date",        width: 90,  align: "center" as const, colIdx: 6  },
-  { label: "Topic",       width: 260, align: "center" as const, colIdx: 4  },
-  { label: "Topic Score", width: 110,  align: "center" as const, colIdx: 5  },
+  { label: "Topic",       width: 260, align: "left"   as const, colIdx: 4  },
+  { label: "Topic Score", width: 110, align: "center" as const, colIdx: 5  },
 ];
 const TI_GRID = TI_COLS.map(c => `${c.width}px`).join(" ");
 
@@ -264,7 +258,7 @@ function DataTable({ rows, sort, onSort }: {
             const text = cell === null || cell === undefined ? "" : String(cell);
             return (
               <span key={j} className="px-2 py-1.5 text-gray-800"
-                    style={cd.label === "Domain"
+                    style={(cd.label === "Domain" || cd.label === "District" || cd.label === "Topic")
                       ? { textAlign: cd.align, overflowWrap: "anywhere" }
                       : { textAlign: cd.align, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}
                     title={text}>
@@ -417,23 +411,25 @@ function TopicInsightsContent() {
             <MultiSelectDropdown label="Campaign" value={filterCampaign} onChange={setFilterCampaign} search={searchCampaigns} />
             <MultiSelectDropdown label="Date"     value={filterDate}     onChange={setFilterDate}     search={searchDates} />
             <MultiSelectDropdown label="Topic"    value={filterTopic}    onChange={setFilterTopic}    options={TOPICS} />
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => setShowDefs(true)}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 rounded-lg bg-white transition-colors shrink-0"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs text-gray-500 hover:text-gray-800 border border-gray-200 hover:border-gray-400 rounded-lg bg-white transition-colors"
             >
               <Info size={13} />
               Dashboard Guide
             </button>
+            <SortDropdown sort={sort} onSort={setSort} />
           </div>
-          <SortDropdown sort={sort} onSort={setSort} />
         </div>
 
         {showDefs && <DefinitionsModal onClose={() => setShowDefs(false)} />}
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", WebkitOverflowScrolling: "touch", padding: "0 24px 24px" }}>
-        <div style={{ minWidth: 1240, width: "100%" }}>
+        <div style={{ minWidth: 1270, width: "100%" }}>
 
         {/* AVG Topic Score chart — driven by the same filtered rows as the table */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-4 overflow-hidden" style={{ height: 340 }}>
@@ -457,15 +453,15 @@ function TopicInsightsContent() {
             <button
               onClick={() => {
                 // Raw order (card 181): 0=District 1=Domain 2=Campaign 3=State 4=Topic 5=Topic_Score 6=Date
-                // Desired: District, Domain, State, Campaign, Topic, Topic Score, Date
-                const ORDER = [0, 1, 3, 2, 4, 5, 6];
+                // Desired: District, Domain, State, Campaign, Date, Topic, Topic Score
+                const ORDER = [0, 1, 3, 2, 6, 4, 5];
                 const exportCols = ORDER.map((i) => cols[i]).filter(Boolean);
                 // Strip campaign description to just the C# code (e.g. "C7: July..." → "C7")
                 const exportRows = rows.map((r) => ORDER.map((i) => {
                   if (i === 2) return String(r[i] ?? "").split(":")[0].trim();
                   return r[i];
                 }));
-                exportToCsv("topic-insights", exportCols, exportRows);
+                exportToCsv("DATIA ABMxi-Topic-Insights", exportCols, exportRows);
               }}
               className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white transition-colors"
             >

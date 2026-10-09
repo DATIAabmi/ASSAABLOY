@@ -1,13 +1,63 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, Download, ExternalLink, Loader2 } from "lucide-react";
+import React, { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { ArrowDown, ArrowUp, ArrowUpDown, Download, ExternalLink, Info, Loader2, X } from "lucide-react";
 import DashboardHeader from "@/components/DashboardHeader";
 import { useFilter } from "@/components/FilterContext";
 import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 import { exportDivToPng } from "@/lib/exportChartToPng";
+import { exportToCsv } from "@/lib/exportCsv";
 import { channelColor as getChannelColor } from "@/lib/channelColors";
 import DonutBreakdown from "@/components/DonutBreakdown";
+
+// ─── Definitions modal ────────────────────────────────────────────────────────
+
+const DEFINITIONS: { term: string; def: React.ReactNode }[] = [
+  { term: "Filter",                     def: "Filter by Campaign, Date Range, or Channel." },
+  { term: "Reset",                      def: <>Click <strong>Reset Filters</strong> to clear all selected filters.</> },
+  { term: "Export",                     def: <>Use <strong>Export All</strong> to export data from all dashboard views. Use <strong>Export</strong> within an individual dashboard to export data from that view only.</> },
+  { term: "Impressions",                def: "Total times ads were displayed." },
+  { term: "Clicks",                     def: "Total clicks across digital channels." },
+  { term: "CTR",                        def: "Percentage of impressions that generated a click." },
+  { term: "Channel Performance",        def: "Shows Clicks, Impressions, or CTR by channel. Click a channel to filter the dashboard and view performance for that channel only." },
+  { term: "Content Engagements",  def: "Shows performance for each content asset, including the channels where it was promoted, impressions, clicks, and CTR." },
+];
+
+function DefinitionsModal({ onClose }: { onClose: () => void }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  if (!mounted) return null;
+
+  return createPortal(
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)" }} onMouseDown={onClose} />
+      <div
+        style={{ position: "relative", background: "#fff", borderRadius: 16, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", border: "1px solid #f0f0f0", padding: 24, maxWidth: 520, width: "calc(100% - 32px)" }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "#111" }}>Dashboard Guide</span>
+          <button type="button" onClick={onClose} style={{ color: "#9ca3af", cursor: "pointer", background: "none", border: "none", padding: 0 }}>
+            <X size={16} />
+          </button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {DEFINITIONS.map(({ term, def }) => (
+            <div key={term} style={{ display: "flex", gap: 12 }}>
+              <span className="font-bold" style={{ fontSize: 12, color: "#111", flexShrink: 0, minWidth: 140, paddingTop: 1 }}>{term}</span>
+              <span style={{ fontSize: 12, color: "#4b5563", lineHeight: 1.6 }}>{def}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -252,8 +302,28 @@ function GatedContentTable({ campaign, dateStart, dateEnd, filterChannel }: { ca
 
   return (
     <div className="rounded-xl border border-gray-200 shadow-sm" style={{ clipPath: "inset(0 round 0.75rem)" }}>
-      <div ref={titleBarRef} className="sticky top-0 z-20 bg-gray-900 text-white px-5 py-3">
-        <span className="font-bold text-sm tracking-wide uppercase">Gated Content Engagements</span>
+      <div ref={titleBarRef} className="sticky top-0 z-20 bg-gray-900 text-white px-5 py-3 flex items-center justify-between">
+        <span className="font-bold text-sm tracking-wide uppercase">Content Engagements</span>
+        {!loading && sorted.length > 0 && (
+          <button
+            onClick={() => {
+              const exportCols = [
+                { display_name: "Asset Name" },
+                { display_name: "Asset Link" },
+                { display_name: "Campaign" },
+                { display_name: "Channel" },
+                { display_name: "Impressions" },
+                { display_name: "Clicks" },
+                { display_name: "CTR" },
+              ];
+              const exportRows = sorted.map((r) => [r[1], r[2], r[3], r[4], r[5], r[6], r[7]]);
+              exportToCsv("DATIA ABMxi-Content-Insights", exportCols, exportRows);
+            }}
+            className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white transition-colors"
+          >
+            <Download size={13} /> Export
+          </button>
+        )}
       </div>
 
       {loading && (
@@ -349,6 +419,7 @@ export default function Page() {
   const [loading, setLoading] = useState(true);
   const [filterChannel, setFilterChannel] = useState<string[]>([]);
   const [activeChannel, setActiveChannel] = useState<string | null>(null);
+  const [showDefs, setShowDefs] = useState(false);
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -402,6 +473,7 @@ export default function Page() {
   return (
     <div style={{ position: "fixed", top: 0, left: "12rem", right: 0, bottom: 0,
                   display: "flex", flexDirection: "column", background: "#f9fafb", zIndex: 1 }}>
+      {showDefs && <DefinitionsModal onClose={() => setShowDefs(false)} />}
       <div style={{ flexShrink: 0, padding: "16px 24px 0" }}>
         <DashboardHeader />
         <div className="flex items-center gap-2 mb-3">
@@ -412,6 +484,13 @@ export default function Page() {
             options={availableChannels}
             minWidth={160}
           />
+          <div className="ml-auto">
+            <button type="button" onClick={() => setShowDefs(true)}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs text-gray-500 hover:text-gray-800 border border-gray-200 hover:border-gray-400 rounded-lg bg-white transition-colors">
+              <Info size={13} />
+              Dashboard Guide
+            </button>
+          </div>
         </div>
       </div>
 

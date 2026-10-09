@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { ChevronDown, X, ArrowUp, ArrowDown, ArrowUpDown, Download, Info } from "lucide-react";
@@ -17,18 +17,18 @@ function fetchFieldOptions(field: "district" | "domain" | "state") {
 
 // ─── Definitions modal ────────────────────────────────────────────────────────
 
-const DEFINITIONS = [
-  { term: "Filtering",          def: "Use the filters at the top of the page to filter by Campaign, Date Range, District, Domain, or State." },
-  { term: "Reset",              def: "To reset filters, click the Reset Filters button at the top right of the page." },
-  { term: "Sorting",            def: "Sort the table by clicking any column header or using the Sort By menu at the top right of the page." },
-  { term: "Export",             def: "Use Export All at the top of the page to export data from all dashboard views. Use Export within an individual dashboard view to export data from that view only." },
-  { term: "Intel",              def: "Account Intelligence signals including School Board Minutes, RFPs/Bids, Grants/Bonds, Strategic Initiatives, Leadership Changes, and District News. See the Account Intelligence dashboard for details." },
-  { term: "Topic",              def: "Reading Behavior signals indicating above-baseline content consumption on relevant topics. See the Topic Insights dashboard for details." },
+const DEFINITIONS: { term: string; def: React.ReactNode }[] = [
+  { term: "Filter",             def: "Filter by Campaign, Date Range, Organization, Domain, or State." },
+  { term: "Reset",              def: <>Click <strong>Reset Filters</strong> to clear all selected filters.</> },
+  { term: "Sort",               def: <>Sort the table by clicking any column header or using the <strong>Sort By</strong> menu.</> },
+  { term: "Export",             def: <>Use <strong>Export All</strong> to export data from all dashboard views. Use <strong>Export</strong> within an individual dashboard to export data from that view only.</> },
+  { term: "Intel",              def: "Notes whether an Account Intelligence signal exists. Signals include Minutes, Bids/RFPs, Bonds/Grants, Initiatives/Strategic Plans, Leadership Changes, and Vendor Selection. See the Account Intelligence dashboard for details." },
+  { term: "Topic",              def: "Notes whether a Reading Behavior signal exists, indicating above-baseline content consumption on relevant topics. See the Topic Insights dashboard for details." },
   { term: "Engagements",        def: "Total engagement activity, including ad clicks, email opens, and asset downloads." },
   { term: "Engaged Users",      def: "Unique users who engaged with your content or campaign." },
   { term: "Leads",              def: "Unique content downloads by target personas." },
   { term: "Total Downloads",    def: "Total content assets downloaded by contacts." },
-  { term: "Intent Score",       def: "A numerical score reflecting a district's overall level of buying activity based on Account Intelligence, Reading Behavior, and engagement signals." },
+  { term: "Intent Score",       def: "A numerical score reflecting an organization's overall level of buying activity based on Account Intelligence, Reading Behavior, and engagement signals." },
   { term: "Intent Score Trend", def: "Change in Intent Score compared with the prior campaign, indicating whether account activity has increased or decreased." },
 ];
 
@@ -44,7 +44,7 @@ function DefinitionsModal({ onClose }: { onClose: () => void }) {
     >
       <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)" }} />
       <div
-        style={{ position: "relative", background: "#fff", borderRadius: 16, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", border: "1px solid #f0f0f0", padding: 24, maxWidth: 440, width: "calc(100% - 32px)" }}
+        style={{ position: "relative", background: "#fff", borderRadius: 16, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", border: "1px solid #f0f0f0", padding: 24, maxWidth: 520, width: "calc(100% - 32px)" }}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -56,7 +56,7 @@ function DefinitionsModal({ onClose }: { onClose: () => void }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {DEFINITIONS.map(({ term, def }) => (
             <div key={term} style={{ display: "flex", gap: 12 }}>
-              <span style={{ fontWeight: 700, fontSize: 12, color: "#111", flexShrink: 0, minWidth: 90, paddingTop: 1 }}>{term}</span>
+              <span className="font-bold" style={{ fontSize: 12, color: "#111", flexShrink: 0, minWidth: 140, paddingTop: 1 }}>{term}</span>
               <span style={{ fontSize: 12, color: "#4b5563", lineHeight: 1.6 }}>{def}</span>
             </div>
           ))}
@@ -84,7 +84,7 @@ const SORT_COLUMNS = [
   { label: "Leads",         index: 8 },
   { label: "Total Downloads", index: 9 },
   { label: "Intent Score",  index: 10 },
-  { label: "Score Trend",   index: 11 },
+  { label: "Intent Score Trend", index: 11 },
 ];
 
 function SortDropdown({ sort, onSort }: { sort: SortState; onSort: (s: SortState) => void }) {
@@ -251,13 +251,21 @@ function DataTable({
               const cell = row[j];
               const display = cell === null || cell === undefined ? "" : String(cell);
               return (
-                <span key={j} className={`px-3 py-2.5 tabular-nums ${trend ? "" : "text-gray-800"}`}
-                      style={{ textAlign: cd.align, color: trend?.text, overflow: "hidden", whiteSpace: j === 0 ? "normal" : "nowrap", textOverflow: j === 0 ? "unset" : "ellipsis" }}>
+                <span key={j}
+                      className={`px-3 py-2.5 tabular-nums flex items-center ${cd.align === "center" ? "justify-center" : "justify-start"} ${trend ? "" : "text-gray-800"}`}
+                      style={{ color: trend?.text, overflow: "hidden", whiteSpace: j === 0 ? "normal" : "nowrap", textOverflow: j === 0 ? "unset" : "ellipsis" }}>
                   {j === 0 ? (
                     <button onClick={() => onDistrictClick(display)}
                       className="block w-full text-left hover:underline font-medium"
                       style={{ color: trend?.text ?? "#2563eb" }}>
                       {display}
+                    </button>
+                  ) : j === 4 && display === "Y" ? (
+                    <button
+                      onClick={() => onDistrictClick(String(row[0] ?? ""))}
+                      className="text-xs font-bold text-blue-600 hover:underline"
+                      title="View Account Intelligence">
+                      Y
                     </button>
                   ) : display}
                 </span>
@@ -274,7 +282,7 @@ function DataTable({
 
 function EngagedUsersContent() {
   const router = useRouter();
-  const { campaign, resetSignal } = useFilter();
+  const { campaign, dateStart, dateEnd, resetSignal } = useFilter();
 
   const [district, setDistrict] = useState<string[]>([]);
   const [domain, setDomain] = useState<string[]>([]);
@@ -306,10 +314,12 @@ function EngagedUsersContent() {
     const params = new URLSearchParams();
     // Pass short codes only ("C6") — Metabase card uses STARTS_WITH filter
     const campaignCodes = campaign.map((c) => c.split(":")[0].trim());
-    if (campaignCodes.length) params.set("campaign", campaignCodes.join(","));
-    if (district.length)      params.set("district", district.join(","));
-    if (domain.length)        params.set("domain",   domain.join(","));
-    if (state.length)         params.set("state",    state.join(","));
+    if (campaignCodes.length) params.set("campaign",   campaignCodes.join(","));
+    if (district.length)      params.set("district",   district.join(","));
+    if (domain.length)        params.set("domain",     domain.join(","));
+    if (state.length)         params.set("state",      state.join(","));
+    if (dateStart)            params.set("dateStart",  dateStart);
+    if (dateEnd)              params.set("dateEnd",    dateEnd);
 
     fetch(`/api/q405-data?${params.toString()}`)
       .then((r) => r.json())
@@ -320,7 +330,7 @@ function EngagedUsersContent() {
         setLoading(false);
       })
       .catch((err) => { setError(err.message ?? "Failed to load data"); setLoading(false); });
-  }, [campaign, district, domain, state]);
+  }, [campaign, district, domain, state, dateStart, dateEnd]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -343,16 +353,18 @@ function EngagedUsersContent() {
             <MultiSelectDropdown label="District"         value={district} onChange={setDistrict} search={fetchFieldOptions("district")} />
             <MultiSelectDropdown label="Domain" value={domain}   onChange={setDomain}   search={fetchFieldOptions("domain")} />
             <MultiSelectDropdown label="State"            value={state}    onChange={setState}    search={fetchFieldOptions("state")} minWidth={110} />
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => setShowDefs(true)}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 rounded-lg bg-white transition-colors shrink-0"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs text-gray-500 hover:text-gray-800 border border-gray-200 hover:border-gray-400 rounded-lg bg-white transition-colors"
             >
               <Info size={13} />
               Dashboard Guide
             </button>
+            <SortDropdown sort={sort} onSort={setSort} />
           </div>
-          <SortDropdown sort={sort} onSort={setSort} />
         </div>
 
         {showDefs && <DefinitionsModal onClose={() => setShowDefs(false)} />}
@@ -368,8 +380,10 @@ function EngagedUsersContent() {
               <span className="text-gray-400 text-xs">{rows.length.toLocaleString()} records</span>
             )}
           </div>
-          {rows.length > 0 && (
-            <button onClick={() => exportToCsv("engaged-users-by-district", cols, rows)}
+          {!loading && rows.length > 0 && (
+            <button onClick={() => {
+              exportToCsv("DATIA ABMxi-Engaged-Users-By-District", cols, rows);
+            }}
               className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white transition-colors">
               <Download size={13} /> Export
             </button>
@@ -387,18 +401,22 @@ function EngagedUsersContent() {
                  style={{ fontSize: 10, top: titleBarHeight, display: "grid", gridTemplateColumns: EU_GRID }}>
               {EU_COLS.map((cd, i) => (
                 <span key={i}
-                  className={`px-3 py-3 inline-flex items-center gap-0.5 select-none whitespace-nowrap ${cd.colIdx >= 0 ? "cursor-pointer hover:opacity-70" : ""} ${cd.align === "center" ? "justify-center" : "justify-start"}`}
+                  className={`px-3 py-3 relative flex items-center select-none whitespace-nowrap ${cd.colIdx >= 0 ? "cursor-pointer hover:opacity-70" : ""} ${cd.align === "center" ? "justify-center" : "justify-start"}`}
                   onClick={cd.colIdx >= 0 ? () => setSort({ col: cd.colIdx, dir: sort.col === cd.colIdx && sort.dir === "desc" ? "asc" : "desc" }) : undefined}>
                   {cd.label}
-                  {cd.colIdx >= 0 && (sort.col === cd.colIdx
-                    ? (sort.dir === "asc" ? <ArrowUp size={10} className="shrink-0" /> : <ArrowDown size={10} className="shrink-0" />)
-                    : <ArrowUpDown size={10} className="opacity-30 shrink-0" />)}
+                  {cd.colIdx >= 0 && (
+                    <span className={cd.align === "center" ? "absolute right-1" : "ml-0.5"}>
+                      {sort.col === cd.colIdx
+                        ? (sort.dir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />)
+                        : <ArrowUpDown size={10} className="opacity-30" />}
+                    </span>
+                  )}
                 </span>
               ))}
             </div>
             <div className="border border-t-0 border-gray-200 rounded-b-xl shadow-sm" style={{ overflow: "clip" }}>
               <DataTable rows={rows} sort={sort} onSort={setSort}
-                onDistrictClick={(d) => router.push(`/school-board-minutes?district=${encodeURIComponent(d)}`)} />
+                onDistrictClick={(d) => router.push(`/ai-opportunity-feed?district=${encodeURIComponent(d)}`)} />
             </div>
           </>
         )}

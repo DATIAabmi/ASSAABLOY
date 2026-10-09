@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import {
-  ACCOUNT_INTELLIGENCE_EXPORT, ENGAGED_USERS_EXPORT, LEADS_EXPORT, PERSONA_EXPORT, TOPIC_EXPORT,
+  ACCOUNT_INTELLIGENCE_EXPORT, ENGAGED_USERS_EXPORT, GEO_EXPORT, LEADS_EXPORT, PERSONA_EXPORT, TOPIC_EXPORT,
   campaignCode, type ExportColumn, type ExportKind,
 } from "@/lib/exportColumns";
 import {
-  loadAccountIntelligence, loadEngagedUsers, loadLeads, loadPersona, loadTopic, type ExportFilters,
+  loadAccountIntelligence, loadEngagedUsers, loadGeoInsights, loadLeads, loadPersona, loadTopic, type ExportFilters,
 } from "@/lib/exportDatasets";
 
 export const maxDuration = 300;
@@ -23,15 +23,17 @@ interface SectionSpec {
   title: string;
   columns: ExportColumn<never>[];
   load: (f: ExportFilters) => Promise<unknown[]>;
-  fill: string; // ARGB tint for the sheet's header row
+  fill: string;     // ARGB pastel tint for the sheet's header row
+  tabColor: string; // ARGB saturated color for the worksheet tab itself
 }
 
 const SECTIONS: SectionSpec[] = [
-  { title: "Engaged Users by Organization", columns: ENGAGED_USERS_EXPORT as ExportColumn<never>[],        load: loadEngagedUsers,        fill: "FFDBEAFE" },
-  { title: "Account Intelligence",      columns: ACCOUNT_INTELLIGENCE_EXPORT as ExportColumn<never>[], load: loadAccountIntelligence, fill: "FFDCFCE7" },
-  { title: "Persona Insights",          columns: PERSONA_EXPORT as ExportColumn<never>[],              load: loadPersona,             fill: "FFFEF3C7" },
-  { title: "Topic Insights",            columns: TOPIC_EXPORT as ExportColumn<never>[],                load: loadTopic,               fill: "FFF3E8FF" },
-  { title: "Leads Insights",            columns: LEADS_EXPORT as ExportColumn<never>[],                load: loadLeads,               fill: "FFFFE4E6" },
+  { title: "Engaged Users by Organization", columns: ENGAGED_USERS_EXPORT as ExportColumn<never>[],        load: loadEngagedUsers,        fill: "FFDBEAFE", tabColor: "FF3B82F6" },
+  { title: "Account Intelligence",      columns: ACCOUNT_INTELLIGENCE_EXPORT as ExportColumn<never>[], load: loadAccountIntelligence, fill: "FFDCFCE7", tabColor: "FF22C55E" },
+  { title: "Persona Insights",          columns: PERSONA_EXPORT as ExportColumn<never>[],              load: loadPersona,             fill: "FFFEF3C7", tabColor: "FFEAB308" },
+  { title: "Topic Insights",            columns: TOPIC_EXPORT as ExportColumn<never>[],                load: loadTopic,               fill: "FFF3E8FF", tabColor: "FFA855F7" },
+  { title: "Leads Insights",            columns: LEADS_EXPORT as ExportColumn<never>[],                load: loadLeads,               fill: "FFFFE4E6", tabColor: "FFF43F5E" },
+  { title: "Geo Insights",              columns: GEO_EXPORT as ExportColumn<never>[],                  load: loadGeoInsights,         fill: "FFD1FAE5", tabColor: "FF10B981" },
 ];
 
 function parseList(v: string | null): string[] {
@@ -285,8 +287,10 @@ function writeSheet(
   fill: string,
   columns: MasterColumn[],
   rows: unknown[][],
+  tabColor?: string,
 ) {
   const ws = wb.addWorksheet(title, { views: [{ state: "frozen", ySplit: 1 }] });
+  if (tabColor) ws.properties.tabColor = { argb: tabColor };
 
   // Row 1 — column headers. Every column is defined exactly once on this
   // sheet, so Organization | Domain | State | Campaign appear a single time.
@@ -331,7 +335,7 @@ async function buildWorkbook(sections: { spec: SectionSpec; rows: unknown[] }[])
 
   for (const { spec, rows } of sections) {
     const values = rows.map((row) => spec.columns.map((c) => c.value(row as never)));
-    writeSheet(wb, spec.title, spec.fill, spec.columns, values);
+    writeSheet(wb, spec.title, spec.fill, spec.columns, values, spec.tabColor);
   }
 
   const out = await wb.xlsx.writeBuffer();

@@ -101,9 +101,11 @@ export default function MultiSelectDropdown(props: Props) {
         } ${open ? "ring-2 ring-blue-100 border-blue-300" : ""}`}
         style={{ minWidth }}
       >
-        <span className={`text-[13px] font-bold uppercase tracking-wider shrink-0 ${active ? "text-blue-400" : "text-gray-400"}`}>
-          {label.toUpperCase().replace("XI", "xi")}
-        </span>
+        {!active && (
+          <span className="text-[13px] font-bold uppercase tracking-wider shrink-0 text-gray-400">
+            {label.toUpperCase().replace("XI", "xi")}
+          </span>
+        )}
         <span className="flex-1 text-left truncate text-xs">
           {active
             ? <span className="text-blue-700 font-semibold">{summarize(value)}</span>
@@ -178,7 +180,7 @@ export default function MultiSelectDropdown(props: Props) {
                 <button
                   key={opt}
                   onClick={() => toggle(opt)}
-                  className={`w-full flex items-center gap-2.5 text-left px-4 py-2 mx-1 rounded-lg text-sm truncate transition-colors ${checked ? "text-blue-700 font-semibold bg-blue-50" : "text-gray-700 hover:bg-gray-50"}`}
+                  className={`w-full flex items-center gap-2 text-left px-3 py-1.5 mx-1 rounded-lg text-[10px] truncate transition-colors ${checked ? "text-blue-700 font-semibold bg-blue-50" : "text-gray-700 hover:bg-gray-50"}`}
                   style={{ width: "calc(100% - 8px)" }}
                 >
                   <span className={`flex items-center justify-center w-4 h-4 rounded-md border shrink-0 transition-colors ${checked ? "bg-blue-600 border-blue-600" : "border-gray-300"}`}>

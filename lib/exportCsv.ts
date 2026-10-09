@@ -8,6 +8,10 @@ const COL_NAME_MAP: Record<string, string> = {
   "Dist": "District",
   "Dom": "Domain",
   "Eng": "Engagements",
+  "Downloads": "Total Downloads",
+  "Organization": "District",
+  "Campaign #": "Campaign",
+  "Source Link": "Link",
 };
 
 function friendlyName(name: string): string {

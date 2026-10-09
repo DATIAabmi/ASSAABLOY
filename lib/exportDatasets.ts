@@ -4,7 +4,7 @@
 
 import {
   AI_SIGNALS_DB_ID, AI_SIGNALS_SQL, LEADS_CARD_ID, SCORING_DB_ID, TOPIC_CARD_ID,
-  engagedUsersSql, leadsCardParams, personaSql, queryCardAll, queryNativeAll,
+  engagedUsersSql, geoInsightsSql, leadsCardParams, personaSql, queryCardAll, queryNativeAll,
   topicCardParams,
 } from "@/lib/metabaseQueries";
 import { campaignCode } from "@/lib/exportColumns";
@@ -55,6 +55,11 @@ export async function loadTopic(f: ExportFilters): Promise<Row[]> {
   return rows
     .map(pick(["District", "Domain", "Campaign", "ST", "Topic", "Topic_Score", "Date"]))
     .filter((r) => keep(r[2]));
+}
+
+/** Geo Insights — matches card 169 (state-level only, no district breakdown). */
+export async function loadGeoInsights(f: ExportFilters): Promise<Record<string, unknown>[]> {
+  return queryNativeAll(SCORING_DB_ID, geoInsightsSql({ campaigns: f.campaigns, dateStart: f.dateStart, dateEnd: f.dateEnd }));
 }
 
 /** Leads Insights — card 541 once per campaign. No Intel/SBM column: that's a

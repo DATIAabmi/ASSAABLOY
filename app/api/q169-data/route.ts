@@ -26,20 +26,20 @@ export async function GET(req: NextRequest) {
 
   // Matches card 169 SQL exactly.
   const where: string[] = [
-    "SAFE_CAST(engagements AS INT64) != 0",
+    "SAFE_CAST(engagements AS FLOAT64) != 0",
     "state IS NOT NULL", "state != 'cState'", "state != ''",
   ];
 
   if (campaigns.length)     where.push(`Abmi_Campaign IN ${sqlInList(campaigns)}`);
   if (states.length)        where.push(`State IN ${sqlInList(states)}`);
-  if (dateStart && dateEnd) where.push(`DATE(Last_Updated) BETWEEN ${sqlStr(dateStart)} AND ${sqlStr(dateEnd)}`);
+  if (dateStart && dateEnd) where.push(`DATE(date_max_for_intent_scoring) BETWEEN ${sqlStr(dateStart)} AND ${sqlStr(dateEnd)}`);
 
   const sql = `
 SELECT
   State,
-  SUM(SAFE_CAST(engagements AS INT64))  AS Engagements,
-  COUNT(DISTINCT engaged_user)           AS Engaged_Users,
-  COUNT(DISTINCT leads)                  AS leads
+  SUM(SAFE_CAST(engagements AS FLOAT64))  AS Engagements,
+  COUNT(DISTINCT engaged_user)             AS Engaged_Users,
+  COUNT(DISTINCT leads)                    AS leads
 FROM ${TABLE}
 WHERE ${where.join("\n  AND ")}
 GROUP BY State

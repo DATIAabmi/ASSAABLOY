@@ -37,7 +37,7 @@ function buildWhere(campaign: string, dateStart: string, dateEnd: string, distri
     "sc.job_title != ''",
   ];
   if (campaign)            parts.push(`sc.abmi_campaign = ${sqlStr(campaign)}`);
-  if (dateStart && dateEnd) parts.push(`DATE(sc.last_updated) BETWEEN ${sqlStr(dateStart)} AND ${sqlStr(dateEnd)}`);
+  if (dateStart && dateEnd) parts.push(`DATE(sc.date_max_for_intent_scoring) BETWEEN ${sqlStr(dateStart)} AND ${sqlStr(dateEnd)}`);
   if (district)            parts.push(`sc.topic_district = ${sqlStr(district)}`);
   if (state)               parts.push(`sc.state = ${sqlStr(state)}`);
   return "WHERE " + parts.join("\n  AND ");

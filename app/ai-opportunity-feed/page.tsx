@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ExternalLink, Loader2, Download, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown } from "lucide-react";
+import React, { useEffect, useLayoutEffect, useRef, useState, Suspense } from "react";
+import { createPortal } from "react-dom";
+import { ExternalLink, Loader2, Download, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, Info, X } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import DashboardHeader from "@/components/DashboardHeader";
 import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 import { exportToCsv } from "@/lib/exportCsv";
@@ -12,28 +14,78 @@ type Signal = Record<string, unknown>;
 type SortDir = "asc" | "desc";
 interface SortState { col: string; dir: SortDir }
 
+// ─── Dashboard Guide modal ────────────────────────────────────────────────────
+
+const DEFINITIONS: { term: string; def: React.ReactNode }[] = [
+  { term: "Filter",           def: "Filter by Campaign, Date Range, Organization, Domain, State, Market, Keywords, Category, or Source." },
+  { term: "Reset",            def: <>Click <strong>Reset Filters</strong> to clear all selected filters.</> },
+  { term: "Sort",             def: <>Sort the table by clicking any column header or using the <strong>Sort By</strong> menu.</> },
+  { term: "Export",           def: <>Use <strong>Export All</strong> to export data from all dashboard views. Use <strong>Export</strong> within an individual dashboard to export data from that view only.</> },
+  { term: "Keywords",         def: "Key terms identifying the topic, activity, or opportunity associated with the signal." },
+  { term: "Category",         def: <>Type of Account Intelligence signal, such as <strong>Bids/RFPs, Bonds/Grants, Funding/Capital Projects, Leadership Changes, Initiatives/Strategic Plans,</strong> and <strong>Vendor Selection</strong>.</> },
+  { term: "Source & Link",    def: "Source type, such as News & Media or organization website, with a link to the original source." },
+  { term: "Strength",         def: "Rating indicating the strength and immediacy of the potential opportunity." },
+  { term: "Signal Analysis",  def: "Explains why the information represents a meaningful opportunity signal." },
+  { term: "Source Text",      def: "Supporting content from the original source used to identify and analyze the signal." },
+  { term: "Market",           def: "K12 or Higher Education (HE)." },
+];
+
+function DefinitionsModal({ onClose }: { onClose: () => void }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  if (!mounted) return null;
+
+  return createPortal(
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)" }} onMouseDown={onClose} />
+      <div
+        style={{ position: "relative", background: "#fff", borderRadius: 16, boxShadow: "0 20px 60px rgba(0,0,0,0.18)", border: "1px solid #f0f0f0", padding: 24, maxWidth: 520, width: "calc(100% - 32px)" }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <span style={{ fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: "#111" }}>Dashboard Guide</span>
+          <button type="button" onClick={onClose} style={{ color: "#9ca3af", cursor: "pointer", background: "none", border: "none", padding: 0 }}>
+            <X size={16} />
+          </button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {DEFINITIONS.map(({ term, def }) => (
+            <div key={term} style={{ display: "flex", gap: 12 }}>
+              <span className="font-bold" style={{ fontSize: 12, color: "#111", flexShrink: 0, minWidth: 140, paddingTop: 1 }}>{term}</span>
+              <span style={{ fontSize: 12, color: "#4b5563", lineHeight: 1.6 }}>{def}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function extractDomain(url: string | null | undefined): string {
   if (!url) return "";
   try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; }
 }
 
 // Full column grid — table scrolls horizontally
-// # | District | Domain | State | Campaign | Keywords | Source Link | Date | Category | Source | Signal Analysis | Strength | Source Text | Market
+// # | District | Domain | State | Campaign | Keywords | Category | Date | Source & Link | Strength | Signal Analysis | Source Text | Market
 const COLS = [
-  { key: "#",               width: 30,  sort: false, flex: false },
-  { key: "District",        width: 240, sort: true,  flex: false },
-  { key: "Domain",          width: 130, sort: true,  flex: false },
-  { key: "State",           width: 50,  sort: true,  flex: false },
-  { key: "Campaign",        width: 100, sort: true,  flex: false },
-  { key: "Keywords",        width: 190, sort: true,  flex: false },
-  { key: "Source Link",     width: 100, sort: false, flex: false },
-  { key: "Date",            width: 80,  sort: true,  flex: false },
-  { key: "Category",        width: 130, sort: true,  flex: false },
-  { key: "Source",          width: 85,  sort: true,  flex: false },
-  { key: "Signal Analysis", width: 240, sort: true,  flex: true  },
-  { key: "Strength",        width: 80,  sort: true,  flex: false },
-  { key: "Source Text",     width: 280, sort: false, flex: true  },
-  { key: "Market",          width: 80,  sort: true,  flex: false },
+  { key: "#",               width: 30,  sort: false, flex: false, center: false },
+  { key: "District",        width: 240, sort: true,  flex: false, center: false },
+  { key: "Domain",          width: 130, sort: true,  flex: false, center: false },
+  { key: "State",           width: 50,  sort: true,  flex: false, center: true  },
+  { key: "Campaign",        width: 100, sort: true,  flex: false, center: true  },
+  { key: "Keywords",        width: 190, sort: true,  flex: false, center: false },
+  { key: "Category",        width: 130, sort: true,  flex: false, center: false },
+  { key: "Date",            width: 100, sort: true,  flex: false, center: false },
+  { key: "Source & Link",   width: 140, sort: true,  flex: false, center: false },
+  { key: "Strength",        width: 80,  sort: true,  flex: false, center: true  },
+  { key: "Signal Analysis", width: 240, sort: true,  flex: true,  center: false },
+  { key: "Source Text",     width: 280, sort: false, flex: true,  center: false },
+  { key: "Market",          width: 80,  sort: true,  flex: false, center: false },
 ];
 
 const SORT_OPTIONS = COLS.filter((c) => c.sort);
@@ -95,7 +147,7 @@ function getRowValue(row: Signal, colKey: string): unknown {
     case "Keywords":        return row["Keywords"];
     case "Date":            return row["Date"];
     case "Category":        return row["Category"];
-    case "Source":          return row["Source"];
+    case "Source & Link":   return row["Source"];
     case "Signal Analysis": return row["Signal Analysis"];
     case "Strength":        return row["Strength"];
     case "Market":          return row["Market"];
@@ -103,18 +155,22 @@ function getRowValue(row: Signal, colKey: string): unknown {
   }
 }
 
-export default function AIOpportunityFeed() {
+function AIOpportunityFeedContent() {
   const { campaign, resetSignal } = useFilter();
+  const searchParams = useSearchParams();
+  const urlDistrict = searchParams.get("district");
   const [rows, setRows]       = useState<Signal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
-  const [sort, setSort]       = useState<SortState>({ col: "Date", dir: "desc" });
-  const [filterDistrict, setFilterDistrict] = useState<string[]>([]);
+  const [sort, setSort]       = useState<SortState>({ col: "Strength", dir: "desc" });
+  const [filterDistrict, setFilterDistrict] = useState<string[]>(urlDistrict ? [urlDistrict] : []);
   const [filterDomain,   setFilterDomain]   = useState<string[]>([]);
   const [filterState,    setFilterState]    = useState<string[]>([]);
+  const [filterKeywords, setFilterKeywords] = useState<string[]>([]);
   const [filterCategory, setFilterCategory] = useState<string[]>([]);
   const [filterSource,   setFilterSource]   = useState<string[]>([]);
   const [filterMarket,   setFilterMarket]   = useState<string[]>([]);
+  const [showGuide, setShowGuide] = useState(false);
 
   // Clear local filters when the global Reset Filters button is pressed
   useEffect(() => {
@@ -122,10 +178,11 @@ export default function AIOpportunityFeed() {
     setFilterDistrict([]);
     setFilterDomain([]);
     setFilterState([]);
+    setFilterKeywords([]);
     setFilterCategory([]);
     setFilterSource([]);
     setFilterMarket([]);
-    setSort({ col: "Date", dir: "desc" });
+    setSort({ col: "Strength", dir: "desc" });
   }, [resetSignal]);
 
   const titleBarRef = useRef<HTMLDivElement>(null);
@@ -153,6 +210,7 @@ export default function AIOpportunityFeed() {
       .catch((e: Error) => { setError(e.message ?? "Failed to load"); setLoading(false); });
   }, []);
 
+  const keywordsOptions = [...new Set(rows.flatMap((r) => String(r["Keywords"] ?? "").split(",").map((k) => k.trim())).filter(Boolean))].sort();
   const categoryOptions = [...new Set(rows.map((r) => String(r["Category"] ?? "")).filter(Boolean))].sort();
   const sourceOptions   = [...new Set(rows.map((r) => String(r["Source"]   ?? "")).filter(Boolean))].sort();
   const marketOptions   = [...new Set(["K12", "HE", ...rows.map((r) => String(r["Market"] ?? "")).filter(Boolean)])];
@@ -161,10 +219,32 @@ export default function AIOpportunityFeed() {
   const domainOf   = (r: Signal) => String((r["Domain"] as string) || extractDomain(r["Source Link"] as string) || "");
   const stateOf    = (r: Signal) => String(r["State"] ?? "");
 
+  // District name matching: handles exact, case-insensitive, contains, and
+  // significant-word overlap so topic_district values like "Portland USD" match
+  // Organization values like "Portland Public Schools".
+  const STOP_WORDS = new Set(["school", "schools", "district", "unified", "public", "independent", "county", "city", "the", "of", "and", "usd", "isd", "csd", "cusd", "k12"]);
+  const sigWords = (s: string) =>
+    s.toLowerCase().split(/[\s,.()\-/]+/).filter((w) => w.length > 3 && !STOP_WORDS.has(w));
+
+  const districtMatch = (org: string, filter: string): boolean => {
+    const orgL = org.toLowerCase().trim();
+    const filterL = filter.toLowerCase().trim();
+    if (orgL === filterL) return true;
+    if (orgL.includes(filterL) || filterL.includes(orgL)) return true;
+    const fw = sigWords(filter);
+    const ow = sigWords(org);
+    return fw.length > 0 && fw.some((w) => ow.includes(w));
+  };
+
   const searchOptions = (get: (r: Signal) => string) => (query: string): Promise<string[]> => {
     const ql = query.trim().toLowerCase();
     const opts = [...new Set(rows.map(get).filter(Boolean))].sort();
     return Promise.resolve((ql ? opts.filter((o) => o.toLowerCase().includes(ql)) : opts).slice(0, 200));
+  };
+
+  const searchKeywords = (query: string): Promise<string[]> => {
+    const ql = query.trim().toLowerCase();
+    return Promise.resolve((ql ? keywordsOptions.filter((k) => k.toLowerCase().includes(ql)) : keywordsOptions).slice(0, 200));
   };
 
   // Global ABMxi Campaign filter (header dropdown) — full labels ("C5: September
@@ -172,11 +252,15 @@ export default function AIOpportunityFeed() {
   const campaignCodes = campaign.map((c) => c.split(":")[0].trim());
 
   const filtered = rows.filter((r) => {
-    if (campaignCodes.length && !campaignCodes.includes(String(r["Campaign #"] ?? ""))) return false;
+    if (campaignCodes.length    && !campaignCodes.includes(String(r["Campaign #"] ?? "")))  return false;
+    if (filterKeywords.length) {
+      const rowKws = String(r["Keywords"] ?? "").split(",").map((k) => k.trim());
+      if (!filterKeywords.some((kw) => rowKws.includes(kw))) return false;
+    }
     if (filterCategory.length && !filterCategory.includes((r["Category"] as string) ?? "")) return false;
     if (filterSource.length   && !filterSource.includes((r["Source"] as string) ?? ""))     return false;
     if (filterMarket.length   && !filterMarket.includes(String(r["Market"] ?? "")))          return false;
-    if (filterDistrict.length && !filterDistrict.includes(districtOf(r))) return false;
+    if (filterDistrict.length && !filterDistrict.some((fd) => districtMatch(districtOf(r), fd))) return false;
     if (filterDomain.length   && !filterDomain.includes(domainOf(r)))     return false;
     if (filterState.length    && !filterState.includes(stateOf(r)))       return false;
     return true;
@@ -194,7 +278,7 @@ export default function AIOpportunityFeed() {
 
   const csvCols = [
     "Organization", "Domain", "State", "Campaign #", "Keywords",
-    "Source Link", "Date", "Category", "Source", "Signal Analysis", "Strength", "Source Text", "Market",
+    "Category", "Source", "Source Link", "Strength", "Signal Analysis", "Source Text", "Market",
   ].map((k) => ({ display_name: k, base_type: "type/Text" }));
   const csvRows = sorted.map((r) => csvCols.map((c) => r[c.display_name]));
 
@@ -210,12 +294,24 @@ export default function AIOpportunityFeed() {
             <MultiSelectDropdown label="District" value={filterDistrict} onChange={setFilterDistrict} search={searchOptions(districtOf)} />
             <MultiSelectDropdown label="Domain"   value={filterDomain}   onChange={setFilterDomain}   search={searchOptions(domainOf)} />
             <MultiSelectDropdown label="State"    value={filterState}    onChange={setFilterState}    search={searchOptions(stateOf)} minWidth={110} />
+            <MultiSelectDropdown label="Keywords" value={filterKeywords} onChange={setFilterKeywords} search={searchKeywords} />
             <MultiSelectDropdown label="Category" value={filterCategory} onChange={setFilterCategory} options={categoryOptions} />
             <MultiSelectDropdown label="Source"   value={filterSource}   onChange={setFilterSource}   options={sourceOptions} />
           </div>
-          <SortDropdown sort={sort} onSort={setSort} />
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowGuide(true)}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs text-gray-500 hover:text-gray-800 border border-gray-200 hover:border-gray-400 rounded-lg bg-white transition-colors"
+            >
+              <Info size={13} />
+              Dashboard Guide
+            </button>
+            <SortDropdown sort={sort} onSort={setSort} />
+          </div>
         </div>
       </div>
+      {showGuide && <DefinitionsModal onClose={() => setShowGuide(false)} />}
 
       {/* Horizontally scrollable content area */}
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "0 24px 24px" }}>
@@ -228,7 +324,7 @@ export default function AIOpportunityFeed() {
             </div>
             {!loading && sorted.length > 0 && (
               <button
-                onClick={() => exportToCsv("ai-signals", csvCols as never, csvRows as never)}
+                onClick={() => exportToCsv("DATIA ABMxi-Account-Intelligence", csvCols as never, csvRows as never)}
                 className="flex items-center gap-1.5 text-xs text-gray-300 hover:text-white transition-colors"
               >
                 <Download size={13} /> Export
@@ -255,7 +351,7 @@ export default function AIOpportunityFeed() {
                   <span
                     key={c.key}
                     onClick={c.sort ? () => setSort({ col: c.key, dir: sort.col === c.key && sort.dir === "desc" ? "asc" : "desc" }) : undefined}
-                    className={c.sort ? "cursor-pointer hover:opacity-70 inline-flex items-center gap-0.5" : ""}
+                    className={`${c.sort ? "cursor-pointer hover:opacity-70" : ""} ${c.center ? "justify-center" : ""} flex items-center gap-0.5`}
                   >
                     {c.key}
                     {c.sort && sort.col === c.key && (
@@ -306,41 +402,39 @@ export default function AIOpportunityFeed() {
                         {(row["Keywords"] as string) || "—"}
                       </div>
 
-                      {/* Source Link */}
-                      <div className="text-xs pt-0.5">
-                        {link ? (
-                          <a href={link} target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center gap-0.5 text-blue-600 hover:text-blue-800 transition-colors"
-                            title={link}>
-                            <span className="max-w-[72px] inline-block break-all">{domain}</span>
-                            <ExternalLink size={10} className="shrink-0" />
-                          </a>
-                        ) : "—"}
-                      </div>
-
-                      {/* Date */}
-                      <div className="text-xs text-gray-500 tabular-nums pt-0.5">
-                        {fmtDate(row["Date"])}
-                      </div>
-
                       {/* Category */}
                       <div className="text-xs text-gray-700 leading-snug pt-0.5 break-words">
                         {(row["Category"] as string) || "—"}
                       </div>
 
-                      {/* Source */}
-                      <div className="text-xs text-gray-600 leading-snug pt-0.5" style={{ overflowWrap: "anywhere", minWidth: 0 }}>
-                        {(row["Source"] as string) || "—"}
+                      {/* Date */}
+                      <div className="text-xs text-gray-600 pt-0.5">
+                        {row["Date"] ? fmtDate(row["Date"] as string) : "—"}
+                      </div>
+
+                      {/* Source & Link — source name on top, clickable URL below */}
+                      <div className="text-xs pt-0.5">
+                        <div className="text-gray-700 leading-snug" style={{ overflowWrap: "anywhere" }}>
+                          {(row["Source"] as string) || "—"}
+                        </div>
+                        {link && (
+                          <a href={link} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-0.5 text-blue-600 hover:text-blue-800 transition-colors mt-0.5"
+                            title={link}>
+                            <span className="inline-block truncate" style={{ maxWidth: 100 }}>{extractDomain(link) || link}</span>
+                            <ExternalLink size={10} className="shrink-0" />
+                          </a>
+                        )}
+                      </div>
+
+                      {/* Strength */}
+                      <div className="text-xs text-gray-600 tabular-nums pt-0.5 text-center">
+                        {row["Strength"] !== null && row["Strength"] !== undefined && row["Strength"] !== "" ? String(row["Strength"]) : "—"}
                       </div>
 
                       {/* Signal Analysis */}
                       <div className="text-xs text-gray-800 leading-relaxed pt-0.5 break-words">
                         {(row["Signal Analysis"] as string) || "—"}
-                      </div>
-
-                      {/* Strength — centered, between Signal Analysis and Source Text */}
-                      <div className="text-xs text-gray-600 tabular-nums pt-0.5 text-center">
-                        {row["Strength"] !== null && row["Strength"] !== undefined && row["Strength"] !== "" ? String(row["Strength"]) : "—"}
                       </div>
 
                       {/* Source Text — same color as Signal Analysis */}
@@ -361,5 +455,13 @@ export default function AIOpportunityFeed() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AIOpportunityFeed() {
+  return (
+    <Suspense>
+      <AIOpportunityFeedContent />
+    </Suspense>
   );
 }

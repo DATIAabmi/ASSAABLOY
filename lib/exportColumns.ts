@@ -82,6 +82,15 @@ export const TOPIC_EXPORT: ExportColumn<ArrayRow>[] = [
   { header: "Topic Score", value: at(5), kind: "number" },
 ];
 
+// Row shape (geoInsightsSql): State, Engagements, Engaged Users, Leads — state-level
+// only, no per-district breakdown, so this isn't part of the Master roll-up.
+export const GEO_EXPORT: ExportColumn<ObjectRow>[] = [
+  { header: "State",         value: key("State") },
+  { header: "Engagements",   value: key("Engagements"),    kind: "number" },
+  { header: "Engaged Users", value: key("Engaged Users"),  kind: "number" },
+  { header: "Leads",         value: key("Leads"),          kind: "number" },
+];
+
 // Row shape (q174-data): District, Domain, Campaign, State, Job Function, Total Downloads
 export const LEADS_EXPORT: ExportColumn<ArrayRow>[] = [
   { header: "Organization",        value: at(0) },

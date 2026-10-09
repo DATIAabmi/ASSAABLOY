@@ -8,7 +8,7 @@ export async function GET(req: Request) {
   const DEFAULT = encodeURIComponent(DEFAULT_CAMPAIGN);
 
   try {
-    const [funnel, q363, q405, q425, leads, q174, q181, q180, content, q168, q169] = await Promise.all([
+    const [funnel, q363, q405, q425, leads, q174, q181, q180, content, q168, q169, aiSignals] = await Promise.all([
       fetch(`${base}/api/funnel-data?campaign=${DEFAULT}`, { cache: "no-store" }),
       fetch(`${base}/api/q363-data?campaign=${DEFAULT}`, { cache: "no-store" }),
       fetch(`${base}/api/q405-data?campaign=${DEFAULT}`, { cache: "no-store" }),
@@ -20,6 +20,7 @@ export async function GET(req: Request) {
       fetch(`${base}/api/content-data?campaign=${DEFAULT}`, { cache: "no-store" }),
       fetch(`${base}/api/q168-data?campaign=${DEFAULT}`, { cache: "no-store" }),
       fetch(`${base}/api/q169-data?campaign=${DEFAULT}`, { cache: "no-store" }),
+      fetch(`${base}/api/ai-signals-data`, { cache: "no-store" }),
     ]);
 
     return NextResponse.json({
@@ -28,6 +29,7 @@ export async function GET(req: Request) {
       leads: { ok: leads.ok }, q174: { ok: q174.ok },
       q181: { ok: q181.ok }, q180: { ok: q180.ok },
       content: { ok: content.ok }, q168: { ok: q168.ok }, q169: { ok: q169.ok },
+      "ai-signals": { ok: aiSignals.ok },
     });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
