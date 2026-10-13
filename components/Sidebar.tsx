@@ -27,10 +27,7 @@ const navItems = [
   { label: "Topic Insights", icon: BookOpen, href: "/topic-insights" },
   { label: "Content Insights", icon: FileText, href: "/content-insights" },
   { label: "Campaign Creative", icon: MonitorPlay, href: "/ad-samples" },
-  // Hidden to match RAS's current nav exactly ("re-enable when ready" there
-  // too) — the page/route still works with real ASSA ABLOY data at
-  // /school-board-minutes, just not linked from the sidebar.
-  // { label: "School Board Minutes", icon: ScrollText, href: "/school-board-minutes" },
+  { label: "School Board Minutes", icon: ScrollText, href: "/school-board-minutes" },
 ];
 
 export default function Sidebar() {
