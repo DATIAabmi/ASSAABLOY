@@ -10,8 +10,6 @@ import MultiSelectDropdown from "@/components/MultiSelectDropdown";
 import { exportToCsv } from "@/lib/exportCsv";
 import { fmtDate } from "@/lib/fmtDate";
 
-const KEYWORDS = ["after school", "child care", "head start", "enrichment"];
-
 function fetchFieldOptions(field: "district" | "state" | "domain") {
   return (q: string) =>
     fetch(`/api/filter-search?field=${field}&q=${encodeURIComponent(q)}`)
@@ -303,11 +301,19 @@ function SchoolBoardContent() {
     setFilterKeyword([]);
   }, [resetSignal]);
 
+  // Keyword cells are comma-separated for minutes sourced from ai_signals, so
+  // options come from the data rather than a fixed list.
+  const keywordsOf = (row: Row) => String(row[5] ?? "").split(",").map((k) => k.trim()).filter(Boolean);
+  const keywordOptions = [...new Set(allRows.flatMap(keywordsOf))].sort((a, b) => a.localeCompare(b));
+
   // Client-side filter: 0=District 1=Campaign 2=District Domain 3=ST 4=SBM Date 5=Keyword 6=SBM Context 7=SBM Link
   const filteredRows = allRows.filter((row) => {
     if (filterDomain.length  && !filterDomain.map((v) => v.toLowerCase()).includes(String(row[2] ?? "").toLowerCase()))  return false;
     if (filterState.length   && !filterState.map((v) => v.toLowerCase()).includes(String(row[3] ?? "").toLowerCase()))   return false;
-    if (filterKeyword.length && !filterKeyword.map((v) => v.toLowerCase()).includes(String(row[5] ?? "").toLowerCase())) return false;
+    if (filterKeyword.length) {
+      const rowKws = keywordsOf(row).map((k) => k.toLowerCase());
+      if (!filterKeyword.some((v) => rowKws.includes(v.toLowerCase()))) return false;
+    }
     return true;
   });
 
@@ -324,7 +330,7 @@ function SchoolBoardContent() {
               <MultiSelectDropdown label="District" value={filterDistrict} onChange={setFilterDistrict} search={fetchFieldOptions("district")} />
               <MultiSelectDropdown label="Domain"   value={filterDomain}   onChange={setFilterDomain}   search={fetchFieldOptions("domain")} />
               <MultiSelectDropdown label="State"    value={filterState}    onChange={setFilterState}    search={fetchFieldOptions("state")} />
-              <MultiSelectDropdown label="Keyword"  value={filterKeyword}  onChange={setFilterKeyword}  options={KEYWORDS} />
+              <MultiSelectDropdown label="Keyword"  value={filterKeyword}  onChange={setFilterKeyword}  options={keywordOptions} />
             </div>
             <SortDropdown sort={sort} onSort={setSort} />
           </div>

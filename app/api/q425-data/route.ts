@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cachedJson } from "@/lib/apiCache";
+import { CAMPAIGNS } from "@/lib/campaigns";
 
 export const maxDuration = 60;
 
@@ -39,23 +40,79 @@ WHERE e.SBM_Date IS NOT NULL
 ORDER BY topic_district, e.SBM_Date DESC
 `;
 
+// School board minutes also arrive as AI signals (ai_signals table, same DB/
+// Client ID as /api/ai-signals-data). Pulled with native SQL for the same
+// stale-field-metadata reason, filtered to board-minutes sources, and mapped
+// onto the scoring table's 8 columns so both sources render as one table.
+const SIGNALS_DB_ID = 67;
+const SIGNALS_SQL = `
+SELECT
+  Organization          AS District,
+  \`Campaign #\`        AS Campaign,
+  Domain                AS District_Domain,
+  State                 AS State,
+  CAST(\`Date\` AS STRING) AS SBM_Date,
+  Keywords              AS Keyword,
+  COALESCE(NULLIF(\`Source Text\`, ''), \`Signal Analysis\`) AS SBM_Context,
+  \`Source Link\`       AS SBM_Link
+FROM \`project-d5919e8b-bf9c-4f4d-883.analytics.ai_signals\`
+WHERE CAST(\`Client ID\` AS STRING) = '12095'
+  AND (LOWER(Source) LIKE '%board%' OR LOWER(Source) LIKE '%minutes%')
+  AND \`Source Link\` IS NOT NULL
+`;
+
 const CACHE_TTL_MS = 30 * 60 * 1000;
 let memCache: { rows: unknown[][] } | null = null;
 let memCacheAt = 0;
 let inflightPromise: Promise<{ rows: unknown[][] }> | null = null;
 
-async function fetchFullDataset() {
+async function runNative(database: number, query: string): Promise<unknown[][]> {
   const res = await fetch(`${METABASE_URL}/api/dataset`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
-    body: JSON.stringify({ database: DB_ID, type: "native", native: { query: SQL } }),
+    body: JSON.stringify({ database, type: "native", native: { query } }),
     cache: "no-store",
   });
 
-  if (!res.ok) return { rows: [] };
+  if (!res.ok) throw new Error(`Metabase error ${res.status}`);
   const data = await res.json();
-  const rows: unknown[][] = (data.data?.rows ?? []).map((r: unknown[]) =>
-    r.map((v, i) => i === 2 ? v : v)
+  if (data.error || data.status === "failed") throw new Error(String(data.error ?? "Query failed"));
+  return data.data?.rows ?? [];
+}
+
+// ai_signals tags campaigns with the short code ("C5"); the scoring table and
+// the global Campaign filter use the full label ("C5: September 2026").
+function campaignLabel(code: unknown): unknown {
+  const c = String(code ?? "").trim();
+  if (!c) return code;
+  return CAMPAIGNS.find((label) => label.split(":")[0].trim() === c) ?? c;
+}
+
+async function fetchFullDataset() {
+  const [scoring, signals] = await Promise.allSettled([
+    runNative(DB_ID, SQL),
+    runNative(SIGNALS_DB_ID, SIGNALS_SQL),
+  ]);
+  // Either source failing still returns the other's rows.
+  const scoringRows = scoring.status === "fulfilled" ? scoring.value : [];
+  const signalRows  = signals.status === "fulfilled" ? signals.value : [];
+
+  // Drop signals that duplicate a scoring-table minute (same link + date).
+  const key = (r: unknown[]) =>
+    `${String(r[7] ?? "").trim().toLowerCase()}|${String(r[4] ?? "").slice(0, 10)}`;
+  const seen = new Set(scoringRows.map(key));
+  const extra: unknown[][] = [];
+  for (const r of signalRows) {
+    if (seen.has(key(r))) continue;
+    seen.add(key(r));
+    const row = [...r];
+    row[1] = campaignLabel(row[1]);
+    extra.push(row);
+  }
+
+  const rows = [...scoringRows, ...extra].sort((a, b) =>
+    String(a[0] ?? "").localeCompare(String(b[0] ?? "")) ||
+    String(b[4] ?? "").localeCompare(String(a[4] ?? ""))
   );
   return { rows };
 }
