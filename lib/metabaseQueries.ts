@@ -123,6 +123,57 @@ ORDER BY Engagements DESC`;
 
 export const AI_SIGNALS_SQL = `SELECT * FROM ${AI_SIGNALS_TABLE} WHERE CAST(\`Client ID\` AS STRING) = '${AI_SIGNALS_CLIENT_ID}'`;
 
+// School board minutes shown alongside the signals: every minute in the prod
+// scoring table, plus minutes from the dev scoring table whose link isn't in
+// prod. One row per district + campaign + link + meeting date.
+const DEV_SCORING_TABLE = "`prj-datia-prod-e530.df_gcp_campaign_cbl_prod.prod_cbl_dev_assaabloy_202602_scoring`";
+
+const sbmRowsFrom = (table: string) => `
+  SELECT topic_district, email_domain, state, abmi_campaign, curate_topic,
+         FORMAT_DATE('%Y-%m-%d', DATE(e.SBM_Date)) AS SBM_Date, e.SBM_Context, e.SBM_Link
+  FROM ${table}, UNNEST(engagement) AS e
+  WHERE e.SBM_Date IS NOT NULL AND e.SBM_Link IS NOT NULL`;
+
+export const SBM_SIGNALS_SQL = `
+WITH prod AS (${sbmRowsFrom(SCORING_TABLE)}),
+dev AS (${sbmRowsFrom(DEV_SCORING_TABLE)}),
+all_minutes AS (
+  SELECT * FROM prod
+  UNION ALL
+  SELECT * FROM dev WHERE SBM_Link NOT IN (SELECT SBM_Link FROM prod)
+)
+SELECT
+  topic_district                      AS Organization,
+  ANY_VALUE(email_domain)             AS Domain,
+  ANY_VALUE(state)                    AS State,
+  abmi_campaign                       AS Campaign,
+  ANY_VALUE(curate_topic)             AS Keywords,
+  SBM_Date,
+  ANY_VALUE(SBM_Context)              AS SBM_Context,
+  SBM_Link
+FROM all_minutes
+GROUP BY topic_district, abmi_campaign, SBM_Link, SBM_Date`;
+
+/** Maps a SBM_SIGNALS_SQL row onto the ai_signals row shape the Account
+ *  Intelligence tab and its export read, so minutes fill the same columns. */
+export function sbmToSignal(r: Record<string, unknown>): Record<string, unknown> {
+  return {
+    "Organization":    r["Organization"],
+    "Domain":          r["Domain"],
+    "State":           r["State"],
+    "Campaign #":      campaignCode(r["Campaign"]),
+    "Keywords":        r["Keywords"],
+    "Category":        "School Board Minutes",
+    "Date":            r["SBM_Date"],
+    "Source":          "School Board Minutes",
+    "Source Link":     r["SBM_Link"],
+    "Strength":        null,
+    "Signal Analysis": null,
+    "Source Text":     r["SBM_Context"],
+    "Market":          "K12",
+  };
+}
+
 // ── Leads Insights ───────────────────────────────────────────────────────────
 
 // Values are passed without manual quoting — Metabase auto-quotes string/=

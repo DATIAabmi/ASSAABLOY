@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { SBM_SIGNALS_SQL, SCORING_DB_ID, sbmToSignal } from "@/lib/metabaseQueries";
 
 export const maxDuration = 60;
 
@@ -21,17 +22,11 @@ let memCache: SignalCache | null = null;
 let memCacheAt = 0;
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
-async function fetchSignals(): Promise<SignalCache> {
-  if (memCache && Date.now() - memCacheAt < CACHE_TTL_MS) return memCache;
-
+async function runNative(database: number, query: string) {
   const res = await fetch(`${METABASE_URL}/api/dataset`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": API_KEY },
-    body: JSON.stringify({
-      database: DB_ID,
-      type: "native",
-      native: { query: `SELECT * FROM ${TABLE} WHERE CAST(\`Client ID\` AS STRING) = '${CLIENT_ID}'` },
-    }),
+    body: JSON.stringify({ database, type: "native", native: { query } }),
     cache: "no-store",
   });
 
@@ -44,10 +39,24 @@ async function fetchSignals(): Promise<SignalCache> {
   const rows: Record<string, unknown>[] = rawRows.map((row) =>
     Object.fromEntries(cols.map((col, i) => [col, row[i]]))
   );
+  return { rows, cols };
+}
 
-  memCache = { rows, columns: cols };
-  memCacheAt = Date.now();
-  return memCache;
+async function fetchSignals(): Promise<SignalCache> {
+  if (memCache && Date.now() - memCacheAt < CACHE_TTL_MS) return memCache;
+
+  // School board minutes from the scoring tables ride along as extra rows in
+  // the ai_signals shape. If that query fails the signals still load.
+  const [signals, minutes] = await Promise.all([
+    runNative(DB_ID, `SELECT * FROM ${TABLE} WHERE CAST(\`Client ID\` AS STRING) = '${CLIENT_ID}'`),
+    runNative(SCORING_DB_ID, SBM_SIGNALS_SQL).catch(() => null),
+  ]);
+  const rows = [...signals.rows, ...(minutes?.rows ?? []).map(sbmToSignal)];
+  const result = { rows, columns: signals.cols };
+
+  // Don't hold a signals-only result for the full TTL when minutes failed.
+  if (minutes) { memCache = result; memCacheAt = Date.now(); }
+  return result;
 }
 
 export async function GET() {

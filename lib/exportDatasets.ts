@@ -3,9 +3,9 @@
 // as that dashboard tab, so lib/exportColumns.ts definitions apply unchanged.
 
 import {
-  AI_SIGNALS_DB_ID, AI_SIGNALS_SQL, LEADS_CARD_ID, SCORING_DB_ID, TOPIC_CARD_ID,
+  AI_SIGNALS_DB_ID, AI_SIGNALS_SQL, LEADS_CARD_ID, SBM_SIGNALS_SQL, SCORING_DB_ID, TOPIC_CARD_ID,
   engagedUsersSql, geoInsightsSql, leadsCardParams, personaSql, queryCardAll, queryNativeAll,
-  topicCardParams,
+  sbmToSignal, topicCardParams,
 } from "@/lib/metabaseQueries";
 import { campaignCode } from "@/lib/exportColumns";
 
@@ -30,11 +30,15 @@ export async function loadEngagedUsers(f: ExportFilters): Promise<Row[]> {
   return rows.map(pick(["District", "Domain", "ST", "Camp", "SBM", "Topic", "Engagements", "EngagedUser", "UniqueLeads", "Down", "Intent Score", "Score Trend"]));
 }
 
-/** Account Intelligence — every ai_signals row for the client, campaign
- *  filtered by code like the tab does (signals are tagged with their own
- *  "Campaign #", currently all "C5"). */
+/** Account Intelligence — every ai_signals row for the client plus the
+ *  school board minutes the tab shows, campaign filtered by code like the tab
+ *  does (signals are tagged with their own "Campaign #", currently all "C5"). */
 export async function loadAccountIntelligence(f: ExportFilters): Promise<Record<string, unknown>[]> {
-  const rows = await queryNativeAll(AI_SIGNALS_DB_ID, AI_SIGNALS_SQL);
+  const [signals, minutes] = await Promise.all([
+    queryNativeAll(AI_SIGNALS_DB_ID, AI_SIGNALS_SQL),
+    queryNativeAll(SCORING_DB_ID, SBM_SIGNALS_SQL),
+  ]);
+  const rows = [...signals, ...minutes.map(sbmToSignal)];
   const keep = inCampaigns(f.campaigns);
   return rows.filter((r) => keep(r["Campaign #"]));
 }
