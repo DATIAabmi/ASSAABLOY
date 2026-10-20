@@ -6,6 +6,7 @@ import {
   auth0ClientId,
   auth0ClientSecret,
   auth0Issuer,
+  auth0Organization,
   callbackUrl,
   verifyIdToken,
   verifyTransaction,
@@ -63,6 +64,11 @@ export async function GET(request: NextRequest) {
     claims = await verifyIdToken(idToken, tx.nonce);
   } catch {
     return fail(request, "Could not verify your identity");
+  }
+
+  const organization = auth0Organization();
+  if (organization && claims.org_id !== organization) {
+    return fail(request, "Your account is not a member of this organization");
   }
 
   if (!claims.email) return fail(request, "Your Auth0 account has no email address");

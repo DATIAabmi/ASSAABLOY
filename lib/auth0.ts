@@ -4,7 +4,8 @@ import { getSecret } from "@/lib/auth";
 
 // Auth0 Universal Login (OIDC authorization code flow + PKCE).
 // Required env: AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET.
-// Optional env: APP_BASE_URL (defaults to the request origin).
+// Optional env: APP_BASE_URL (defaults to the request origin),
+// AUTH0_ORGANIZATION (org_... ID; when set, only members of that organization can sign in).
 
 export const AUTH0_TX_COOKIE = "__ras_auth0_tx";
 
@@ -25,6 +26,10 @@ export function auth0ClientId(): string {
 
 export function auth0ClientSecret(): string {
   return env("AUTH0_CLIENT_SECRET");
+}
+
+export function auth0Organization(): string | undefined {
+  return process.env.AUTH0_ORGANIZATION || undefined;
 }
 
 export function appBaseUrl(request: NextRequest): string {
@@ -97,5 +102,6 @@ export async function verifyIdToken(idToken: string, nonce: string) {
     given_name?: string;
     family_name?: string;
     name?: string;
+    org_id?: string;
   };
 }

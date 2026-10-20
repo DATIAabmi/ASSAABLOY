@@ -4,6 +4,7 @@ import {
   TX_MAX_AGE_SECONDS,
   auth0ClientId,
   auth0Issuer,
+  auth0Organization,
   callbackUrl,
   pkceChallenge,
   randomToken,
@@ -32,6 +33,8 @@ export async function GET(request: NextRequest) {
     code_challenge: await pkceChallenge(verifier),
     code_challenge_method: "S256",
   }).toString();
+  const organization = auth0Organization();
+  if (organization) authorize.searchParams.set("organization", organization);
 
   const response = NextResponse.redirect(authorize);
   response.cookies.set(AUTH0_TX_COOKIE, await signTransaction({ state, nonce, verifier, returnTo }), {
